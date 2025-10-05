@@ -7,7 +7,7 @@
 </head>
 <body class="bg-light">
 
-<div class="container-fluid py-4"> <!-- Используем container-fluid для большей ширины -->
+<div class="container-fluid py-4">
     <form method="post" id="main-form">
         <div class="row">
             <!-- Левая часть: вероятность + маршруты -->
@@ -29,7 +29,7 @@
                 </div>
             
                 <!-- Маршруты -->
-                <div class="flex-grow-1" style="min-width: 400px;"> <!-- Устанавливаем минимальную ширину -->
+                <div class="flex-grow-1" style="min-width: 400px;">
                     <h5 class="text-center">Маршруты</h5>
                     <hr>
                     <div id="routes-container" style="max-height: 500px; overflow-y: auto;">
@@ -47,7 +47,7 @@
             </div>
 
             <!-- Правая часть -->
-            <div class="col-md-3 ms-auto" style="margin-top: 45px;"> <!-- ms-auto прижимает к правому краю -->
+            <div class="col-md-3 ms-auto" style="margin-top: 45px;">
                 <!-- Время на действие -->
                 <div class="card mb-3">
                     <div class="card-body">
@@ -66,16 +66,19 @@
                                 <div id="time-inputs-{{ i }}" class="d-flex flex-grow-1">
                                     <!-- равномерное -->
                                     <input type="number" min="0" step="0.01" class="form-control form-control-sm me-1 uniform-input" 
-                                           name="time_from_{{ i }}" placeholder="от" style="width: 70px;"
-                                           value="{{ result.time_from[i-1] if result and result.time_from and i-1 < len(result.time_from) else '' }}">
+                                           name="time_from_{{ i }}" placeholder="от" style="width: 90px;"
+                                           value="{{ result.time_from[i-1] if result and result.time_from and i-1 < len(result.time_from) else '' }}"
+                                           title="Для равномерного распределения: левое значение">
                                     <input type="number" min="0" step="0.01" class="form-control form-control-sm uniform-input" 
-                                           name="time_to_{{ i }}" placeholder="до" style="width: 70px;"
-                                           value="{{ result.time_to[i-1] if result and result.time_to and i-1 < len(result.time_to) else '' }}">
+                                           name="time_to_{{ i }}" placeholder="до" style="width: 90px;"
+                                           value="{{ result.time_to[i-1] if result and result.time_to and i-1 < len(result.time_to) else '' }}"
+                                           title="Для равномерного распределения: правое значение (должно быть больше левого)">
 
                                     <!-- константное (по умолчанию скрыто) -->
                                     <input type="number" min="0" step="0.01" class="form-control form-control-sm constant-input d-none" 
                                            name="time_const_{{ i }}" placeholder="=" style="width: 140px;"
-                                           value="{{ result.time_const[i-1] if result and result.time_const and i-1 < len(result.time_const) else '' }}">
+                                           value="{{ result.time_const[i-1] if result and result.time_const and i-1 < len(result.time_const) else '' }}"
+                                           title="Константное значение времени">
                                 </div>
                             </div>
                         {% endfor %}
@@ -151,12 +154,58 @@ document.addEventListener("DOMContentLoaded", function() {
         return sum;
     }
 
+    // --- Проверка равномерного распределения времени ---
+    function validateUniformTime(action) {
+        const timeRow = document.querySelector(`.time-row[data-action="${action}"]`);
+        if (!timeRow) return true;
+        
+        const select = timeRow.querySelector('.time-select');
+        if (select.value !== 'uniform') return true;
+        
+        const fromInput = timeRow.querySelector('input[name="time_from_' + action + '"]');
+        const toInput = timeRow.querySelector('input[name="time_to_' + action + '"]');
+        
+        const fromValue = parseFloat(fromInput.value);
+        const toValue = parseFloat(toInput.value);
+        
+        if (isNaN(fromValue) || isNaN(toValue) || toValue <= fromValue) {
+            fromInput.classList.add('is-invalid');
+            toInput.classList.add('is-invalid');
+            fromInput.title = "Ошибка: правое значение должно быть БОЛЬШЕ левого";
+            toInput.title = "Ошибка: правое значение должно быть БОЛЬШЕ левого";
+            return false;
+        } else {
+            fromInput.classList.remove('is-invalid');
+            toInput.classList.remove('is-invalid');
+            fromInput.title = "Для равномерного распределения: левое значение";
+            toInput.title = "Для равномерного распределения: правое значение (должно быть больше левого)";
+            return true;
+        }
+    }
+
+    // --- Проверка всех равномерных распределений ---
+    function validateAllUniformTimes() {
+        let allValid = true;
+        document.querySelectorAll('.time-row').forEach(row => {
+            if (!row.classList.contains('d-none')) {
+                const action = row.getAttribute('data-action');
+                const select = row.querySelector('.time-select');
+                if (select.value === 'uniform') {
+                    if (!validateUniformTime(action)) {
+                        allValid = false;
+                    }
+                }
+            }
+        });
+        return allValid;
+    }
+
     // --- Обновление отображения суммы вероятностей ---
     function updateProbSumDisplay() {
         const sum = calculateProbSum();
         probSumElement.textContent = sum.toFixed(2);
         
-        const isSumValid = Math.abs(sum - 1) < 0.001; // учитываем погрешность округления
+        const isSumValid = Math.abs(sum - 1) < 0.001;
         
         if (isSumValid) {
             probSumError.style.display = 'none';
@@ -171,17 +220,145 @@ document.addEventListener("DOMContentLoaded", function() {
         return isSumValid;
     }
 
-    // --- Валидация формы ---
-    function validateForm(event) {
+    // --- Сбор данных для JSON ---
+    function collectFormData() {
+        const sampleSize = parseInt(document.querySelector('.sample-size-input').value);
+        
+        // Собираем маршруты
+        const routes = [];
+        const routeRows = document.querySelectorAll('.route-row');
+        const probInputs = document.querySelectorAll('.route-prob');
+        
+        routeRows.forEach((row, index) => {
+            const path = [];
+            const inputs = row.querySelectorAll('.route-input');
+            inputs.forEach(input => {
+                if (input.value.trim() !== '') {
+                    path.push(parseInt(input.value));
+                }
+            });
+            
+            const prob = parseFloat(probInputs[index].value);
+            
+            if (path.length > 0) {
+                routes.push({
+                    prob: prob,
+                    path: path
+                });
+            }
+        });
+        
+        // Собираем действия
+        const actions = [];
+        const usedActions = new Set();
+        
+        // Сначала находим все используемые действия из маршрутов
+        routeRows.forEach(row => {
+            const inputs = row.querySelectorAll('.route-input');
+            inputs.forEach(input => {
+                if (input.value.trim() !== '') {
+                    usedActions.add(parseInt(input.value));
+                }
+            });
+        });
+        
+        // Собираем данные для каждого используемого действия
+        usedActions.forEach(actionId => {
+            const timeRow = document.querySelector(`.time-row[data-action="${actionId}"]`);
+            const errorRow = document.querySelector(`.error-row[data-action="${actionId}"]`);
+            
+            if (timeRow && errorRow) {
+                const timeSelect = timeRow.querySelector('.time-select');
+                const timeType = timeSelect.value === 'uniform' ? 'uniform' : 'const';
+                
+                let timeLeft = null;
+                let timeRight = null;
+                
+                if (timeType === 'uniform') {
+                    timeLeft = parseFloat(timeRow.querySelector(`input[name="time_from_${actionId}"]`).value);
+                    timeRight = parseFloat(timeRow.querySelector(`input[name="time_to_${actionId}"]`).value);
+                } else {
+                    timeLeft = parseFloat(timeRow.querySelector(`input[name="time_const_${actionId}"]`).value);
+                    timeRight = null;
+                }
+                
+                const errorSelect = errorRow.querySelector('select');
+                let errorAction = 'repeat';
+                if (errorSelect.value === 'to_start') errorAction = 'backToStart';
+                else if (errorSelect.value === 'previous') errorAction = 'backAStep';
+                else errorAction = 'repeat';
+                
+                const errorProb = parseFloat(errorRow.querySelector('input').value);
+                
+                actions.push({
+                    id: actionId,
+                    time: {
+                        type: timeType,
+                        left: timeLeft,
+                        right: timeRight
+                    },
+                    error: {
+                        action: errorAction,
+                        prob: errorProb
+                    }
+                });
+            }
+        });
+        
+        return {
+            N: sampleSize,
+            routes: routes,
+            actions: actions
+        };
+    }
+
+    // --- Валидация формы и отправка запроса ---
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        
         const isProbSumValid = updateProbSumDisplay();
+        const isUniformTimeValid = validateAllUniformTimes();
         
         if (!isProbSumValid) {
-            event.preventDefault();
             alert('Сумма вероятностей выбора маршрутов должна быть равна 1. Текущая сумма: ' + probSumElement.textContent);
             return false;
         }
         
-        return true;
+        if (!isUniformTimeValid) {
+            alert('Для равномерного распределения времени правое значение должно быть строго больше левого.');
+            return false;
+        }
+        
+        // Собираем данные для отправки
+        const requestData = collectFormData();
+        
+        try {
+            // Отправляем POST запрос
+            const response = await fetch('/api/calculate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            console.log('requestData:', requestData);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // Обработка успешного ответа
+            console.log('Результат:', result);
+            // Здесь можно добавить отображение результата на странице
+            alert('Расчет успешно выполнен! Результат в консоли.');
+            
+        } catch (error) {
+            console.error('Ошибка при отправке запроса:', error);
+            alert('Произошла ошибка при отправке запроса: ' + error.message);
+        }
     }
 
     // --- Добавить строку маршрута + поле вероятности ---
@@ -191,7 +368,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
         const row = document.createElement("div");
         row.className = "route-row d-flex align-items-center mb-2 flex-nowrap";
-        row.style.overflowX = "auto"; // горизонтальная прокрутка для длинных маршрутов
+        row.style.overflowX = "auto";
         row.innerHTML = `
             <input type="number" min="1" max="10" class="form-control route-input me-2"
                    style="width:60px; flex: 0 0 auto;" name="route_${routeCount}_1" required>
@@ -215,7 +392,7 @@ document.addEventListener("DOMContentLoaded", function() {
         attachProbValidation(probInput);
         updateActionRows();
         updateButtonVisibility();
-        updateProbSumDisplay(); // обновляем сумму после добавления нового поля
+        updateProbSumDisplay();
     }
 
     // --- Добавить новую ячейку в маршруте ---
@@ -264,7 +441,7 @@ document.addEventListener("DOMContentLoaded", function() {
             let value = parseFloat(this.value);
             if (isNaN(value) || value < 0) this.value = "0";
             else if (value > 1) this.value = "1";
-            updateProbSumDisplay(); // обновляем сумму при изменении вероятности
+            updateProbSumDisplay();
         });
     }
 
@@ -285,6 +462,20 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    // --- Валидация равномерного времени ---
+    function attachUniformTimeValidation(input) {
+        input.addEventListener("input", function() {
+            const timeRow = this.closest('.time-row');
+            if (timeRow) {
+                const action = timeRow.getAttribute('data-action');
+                const select = timeRow.querySelector('.time-select');
+                if (select.value === 'uniform') {
+                    validateUniformTime(action);
+                }
+            }
+        });
+    }
+
     // --- "+" кнопка в строке маршрута ---
     function attachCellButton(button) {
         button.addEventListener("click", function() {
@@ -300,18 +491,22 @@ document.addEventListener("DOMContentLoaded", function() {
         const constantInput = inputsContainer.querySelector('.constant-input');
         
         if (select.value === 'uniform') {
-            // Показываем два поля для равномерного распределения
             uniformInputs.forEach(input => {
                 input.classList.remove('d-none');
                 input.required = true;
             });
             constantInput.classList.add('d-none');
             constantInput.required = false;
+            
+            const timeRow = select.closest('.time-row');
+            const action = timeRow.getAttribute('data-action');
+            validateUniformTime(action);
         } else {
-            // Показываем одно поле для константного времени
             uniformInputs.forEach(input => {
                 input.classList.add('d-none');
                 input.required = false;
+                input.classList.remove('is-invalid');
+                input.title = "Для равномерного распределения: левое значение";
             });
             constantInput.classList.remove('d-none');
             constantInput.required = true;
@@ -340,7 +535,6 @@ document.addEventListener("DOMContentLoaded", function() {
             if (timeRow) {
                 timeRow.classList.remove("d-none");
                 timeRow.classList.add("d-flex");
-                // Применяем правильное отображение для выбранного типа распределения
                 const select = timeRow.querySelector('.time-select');
                 handleTimeDistributionChange(select);
             }
@@ -354,14 +548,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // --- Скрытие/показ кнопок ---
     function updateButtonVisibility() {
-        // кнопка "Добавить маршрут"
         if (routeCount >= maxRoutes) {
             addRouteBtn.style.display = "none";
         } else {
             addRouteBtn.style.display = "inline-block";
         }
 
-        // кнопки "+" в строках маршрутов
         document.querySelectorAll(".route-row").forEach(row => {
             const addCellBtn = row.querySelector(".add-cell");
             const cellCount = row.querySelectorAll(".route-input").length;
@@ -375,24 +567,23 @@ document.addEventListener("DOMContentLoaded", function() {
     document.querySelectorAll(".route-prob").forEach(attachProbValidation);
     document.querySelectorAll(".error-prob-input").forEach(attachErrorProbValidation);
     document.querySelectorAll(".sample-size-input").forEach(attachSampleSizeValidation);
+    document.querySelectorAll('.uniform-input').forEach(attachUniformTimeValidation);
     
-    // Обработчики для выбора типа распределения времени
     document.querySelectorAll('.time-select').forEach(select => {
         select.addEventListener('change', function() {
             handleTimeDistributionChange(this);
         });
-        // Инициализация при загрузке
         handleTimeDistributionChange(select);
     });
     
-    // Обработчик отправки формы
-    mainForm.addEventListener('submit', validateForm);
+    // Заменяем стандартную отправку формы на нашу функцию
+    mainForm.addEventListener('submit', handleFormSubmit);
     
     addRouteBtn.addEventListener("click", addRouteRow);
 
     updateActionRows();
     updateButtonVisibility();
-    updateProbSumDisplay(); // инициализация при загрузке
+    updateProbSumDisplay();
 });
 </script>
 </body>
