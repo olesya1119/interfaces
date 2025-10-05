@@ -7,43 +7,41 @@
 </head>
 <body class="bg-light">
 
-<div class="container py-4">
+<div class="container-fluid py-4"> <!-- Используем container-fluid для большей ширины -->
     <form method="post">
-
         <div class="row">
             <!-- Левая часть: вероятность + маршруты -->
-            <div class="col-md-8 d-flex align-items-start">
+            <div class="col-md-9 offset-md-0 d-flex align-items-start">
                 <!-- Вероятность выбрать маршрут -->
                 <div class="me-3" style="min-width:120px;">
-                    <h6>Вероятность<br>выбрать маршрут</h6>
-                    {% for i in range(1,11) %}
-                        <input type="number" step="0.01" min="0" max="1" class="form-control mb-2" name="route_prob" 
-                               value="{{ result.probabilities[i-1] if result and result.probabilities and i-1 < len(result.probabilities) else '' }}" 
-                               placeholder="[0;1]">
-                    {% endfor %}
+                    <h6 style="padding:5px">Вероятность<br>выбрать маршрут</h6>
+                    <div id="prob-container">
+                        <!-- первая строка вероятности -->
+                        <input type="number" step="0.01" min="0" max="1" class="form-control mb-2 route-prob" 
+                               name="route_prob_1" placeholder="[0;1]" required>
+                    </div>
                 </div>
-
+            
                 <!-- Маршруты -->
-                <div class="flex-grow-1">
-                    <h5 class="text-center" style="padding:3px">Маршруты</h5><hr>
-                    {% for i in range(1,11) %}
-                        <div class="d-flex align-items-center me-3">
-                            {% for j in range(1,11) %}
-                                <input type="number" min="1" max="10" class="form-control mb-2 route-input" 
-                                       style="width:60px;" 
-                                       name="route_{{ i }}_{{ j }}"
-                                       value="{{ result.routes[i-1][j-1] if result and result.routes and i-1 < len(result.routes) and j-1 < len(result.routes[i-1]) else '' }}">
-                                {% if j < 10 %}
-                                    <span>→</span>
-                                {% endif %}
-                            {% endfor %}
+                <div class="flex-grow-1" style="min-width: 400px;"> <!-- Устанавливаем минимальную ширину -->
+                    <h5 class="text-center">Маршруты</h5>
+                    <hr>
+                    <div id="routes-container" style="max-height: 500px; overflow-y: auto;">
+                        <!-- первая строка маршрута -->
+                        <div class="route-row d-flex align-items-center mb-2 flex-nowrap" style="overflow-x: auto;">
+                            <input type="number" min="1" max="10" class="form-control route-input me-2" 
+                                   style="width:60px; flex: 0 0 auto;" name="route_1_1" required>
+                            <button type="button" class="btn btn-success btn-sm add-cell flex-shrink-0">+</button>
                         </div>
-                    {% endfor %}
+                    </div>
+                    <div class="text-center mt-2">
+                        <button type="button" class="btn btn-primary btn-sm" id="add-route">Добавить маршрут +</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Правая часть -->
-            <div class="col-md-4" style="margin-top: 45px;">
+            <div class="col-md-3 ms-auto" style="margin-top: 45px;"> <!-- ms-auto прижимает к правому краю -->
                 <!-- Время на действие -->
                 <div class="card mb-3">
                     <div class="card-body">
@@ -83,7 +81,7 @@
                     <div class="card-body">
                         <h6 class="card-title">Ошибки</h6>
                         {% for i in range(1,11) %}
-                            <div class="mb-2 mb-2 error-row d-none" data-action="{{ i }}">
+                            <div class="mb-2 error-row d-none" data-action="{{ i }}">
                                 <span style="width: 30px; text-align: right; margin-right: 10px; margin-left: 15px;">{{ i }}</span>
                                 <select name="error_action" class="form-select form-select-sm me-4">
                                     <option value="repeat" {{ 'selected' if result and result.error_actions and result.error_actions[i-1] == 'repeat' else '' }}>повторить шаг</option>
@@ -123,62 +121,122 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Переключение между равномерным и константным временем (без изменений)
-    document.querySelectorAll(".time-select").forEach(select => {
-        select.addEventListener("change", function() {
-            let targetId = this.dataset.target;
-            let container = document.getElementById(targetId);
-            let uniformInputs = container.querySelectorAll(".uniform-input");
-            let constInput = container.querySelector(".constant-input");
+    const routesContainer = document.getElementById("routes-container");
+    const probContainer = document.getElementById("prob-container");
+    const addRouteBtn = document.getElementById("add-route");
 
-            if (this.value === "uniform") {
-                uniformInputs.forEach(el => el.classList.remove("d-none"));
-                constInput.classList.add("d-none");
-            } else {
-                uniformInputs.forEach(el => el.classList.add("d-none"));
-                constInput.classList.remove("d-none");
-            }
+    let routeCount = 1;
+    const maxRoutes = 10;
+    const maxCells = 10;
+
+    // --- Добавить строку маршрута + поле вероятности ---
+    function addRouteRow() {
+        if (routeCount >= maxRoutes) return;
+        routeCount++;
+
+        const row = document.createElement("div");
+        row.className = "route-row d-flex align-items-center mb-2 flex-nowrap";
+        row.style.overflowX = "auto"; // горизонтальная прокрутка для длинных маршрутов
+        row.innerHTML = `
+            <input type="number" min="1" max="10" class="form-control route-input me-2"
+                   style="width:60px; flex: 0 0 auto;" name="route_${routeCount}_1" required>
+            <button type="button" class="btn btn-success btn-sm add-cell flex-shrink-0">+</button>
+        `;
+        routesContainer.appendChild(row);
+
+        const probInput = document.createElement("input");
+        probInput.type = "number";
+        probInput.min = "0";
+        probInput.max = "1";
+        probInput.step = "0.01";
+        probInput.required = true;
+        probInput.placeholder = "[0;1]";
+        probInput.className = "form-control mb-2 route-prob";
+        probInput.name = `route_prob_${routeCount}`;
+        probContainer.appendChild(probInput);
+
+        attachCellButton(row.querySelector(".add-cell"));
+        attachRouteInputValidation(row.querySelector(".route-input"));
+        attachProbValidation(probInput);
+        updateActionRows();
+        updateButtonVisibility();
+    }
+
+    // --- Добавить новую ячейку в маршруте ---
+    function addRouteCell(button) {
+        const row = button.closest(".route-row");
+        const inputs = row.querySelectorAll(".route-input");
+        const currentCount = inputs.length;
+
+        if (currentCount >= maxCells) return;
+
+        const newInput = document.createElement("input");
+        newInput.type = "number";
+        newInput.min = "1";
+        newInput.max = "10";
+        newInput.required = true;
+        newInput.className = "form-control route-input me-2";
+        newInput.style.width = "60px";
+        newInput.style.flex = "0 0 auto";
+        newInput.name = `route_${[...routesContainer.children].indexOf(row) + 1}_${currentCount + 1}`;
+
+        const arrow = document.createElement("span");
+        arrow.textContent = "→";
+        arrow.className = "me-2 flex-shrink-0";
+
+        row.insertBefore(arrow, button);
+        row.insertBefore(newInput, button);
+
+        attachRouteInputValidation(newInput);
+        updateActionRows();
+        updateButtonVisibility();
+    }
+
+    // --- Валидация ячеек маршрута ---
+    function attachRouteInputValidation(input) {
+        input.addEventListener("input", function() {
+            let value = parseInt(this.value);
+            if (isNaN(value) || value < 1) this.value = "";
+            else if (value > 10) this.value = "10";
+            updateActionRows();
         });
+    }
 
-        // Инициализация видимости полей времени при загрузке
-        let targetId = select.dataset.target;
-        let container = document.getElementById(targetId);
-        let uniformInputs = container.querySelectorAll(".uniform-input");
-        let constInput = container.querySelector(".constant-input");
-        if (select.value === "uniform") {
-            uniformInputs.forEach(el => el.classList.remove("d-none"));
-            constInput.classList.add("d-none");
-        } else {
-            uniformInputs.forEach(el => el.classList.add("d-none"));
-            constInput.classList.remove("d-none");
-        }
-    });
+    // --- Валидация вероятности маршрута ---
+    function attachProbValidation(input) {
+        input.addEventListener("input", function() {
+            let value = parseFloat(this.value);
+            if (isNaN(value) || value < 0) this.value = "0";
+            else if (value > 1) this.value = "1";
+        });
+    }
 
-    // Функция для обновления видимости строк (использует d-none / d-flex)
+    // --- "+" кнопка в строке маршрута ---
+    function attachCellButton(button) {
+        button.addEventListener("click", function() {
+            addRouteCell(this);
+        });
+    }
+
+    // --- Отображение "Время на действие" и "Ошибки" ---
     function updateActionRows() {
-        // Скрываем все строки: добавляем d-none и удаляем d-flex
         document.querySelectorAll(".time-row, .error-row").forEach(row => {
             row.classList.remove("d-flex");
             row.classList.add("d-none");
             row.querySelectorAll("input, select").forEach(el => el.required = false);
         });
 
-        // Собираем уникальные действия, которые реально введены в маршрутах
         let usedActions = new Set();
         document.querySelectorAll(".route-input").forEach(input => {
             let v = input.value.trim();
             if (!v) return;
             let value = parseInt(v, 10);
-            if (!isNaN(value) && value >= 1 && value <= 10) {
-                usedActions.add(value);
-            }
+            if (!isNaN(value) && value >= 1 && value <= 10) usedActions.add(value);
         });
 
-        // Показываем только нужные строки: убираем d-none и ставим d-flex
         usedActions.forEach(action => {
             let timeRow = document.querySelector(`.time-row[data-action="${action}"]`);
             let errorRow = document.querySelector(`.error-row[data-action="${action}"]`);
-            
             if (timeRow) {
                 timeRow.classList.remove("d-none");
                 timeRow.classList.add("d-flex");
@@ -192,40 +250,32 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // Валидация ввода и привязка обновления
-    document.querySelectorAll('input[type="number"]').forEach(input => {
-        input.addEventListener("input", function() {
-            // Удаляем нечисловые символы, кроме точки
-            this.value = this.value.replace(/[^0-9.]/g, '');
+    // --- Скрытие/показ кнопок ---
+    function updateButtonVisibility() {
+        // кнопка "Добавить маршрут"
+        if (routeCount >= maxRoutes) {
+            addRouteBtn.style.display = "none";
+        } else {
+            addRouteBtn.style.display = "inline-block";
+        }
 
-            if (this.classList.contains("route-input")) {
-                let value = parseInt(this.value, 10);
-                if (isNaN(value) || value < 1) {
-                    this.value = "";
-                } else if (value > 10) {
-                    this.value = "10";
-                }
-                updateActionRows();
-            } else if (this.name.includes("route_prob") || this.name.includes("error_prob")) {
-                let value = parseFloat(this.value);
-                if (value < 0) this.value = "0";
-                if (value > 1) this.value = "1";
-            } else if (this.name.includes("sample_size")) {
-                let value = parseInt(this.value, 10);
-                if (value < 1 || isNaN(value)) this.value = "1";
-            } else {
-                let value = parseFloat(this.value);
-                if (value < 0) this.value = "0";
-            }
+        // кнопки "+" в строках маршрутов
+        document.querySelectorAll(".route-row").forEach(row => {
+            const addCellBtn = row.querySelector(".add-cell");
+            const cellCount = row.querySelectorAll(".route-input").length;
+            addCellBtn.style.display = (cellCount >= maxCells) ? "none" : "inline-block";
         });
-    });
+    }
 
-    // Инициализация при загрузке
+    // --- Инициализация ---
+    document.querySelectorAll(".add-cell").forEach(attachCellButton);
+    document.querySelectorAll(".route-input").forEach(attachRouteInputValidation);
+    document.querySelectorAll(".route-prob").forEach(attachProbValidation);
+    addRouteBtn.addEventListener("click", addRouteRow);
+
     updateActionRows();
+    updateButtonVisibility();
 });
 </script>
-
-
-
 </body>
 </html>
