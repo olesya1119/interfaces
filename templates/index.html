@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Маршруты</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+    <form method="post">
+
+        <div class="row">
+            <!-- Левая часть: вероятность + маршруты -->
+            <div class="col-md-8 d-flex align-items-start">
+                <!-- Вероятность выбрать маршрут -->
+                <div class="me-3" style="min-width:120px;">
+                    <h6>Вероятность<br>выбрать маршрут</h6>
+                    {% for i in range(1,11) %}
+                        <input type="number" step="0.01" min="0" max="1" class="form-control mb-2" name="route_prob" 
+                               value="{{ result.probabilities[i-1] if result and result.probabilities and i-1 < len(result.probabilities) else '' }}" 
+                               placeholder="[0;1]">
+                    {% endfor %}
+                </div>
+
+                <!-- Маршруты -->
+                <div class="flex-grow-1">
+                    <h5 class="text-center" style="padding:3px">Маршруты</h5><hr>
+                    {% for i in range(1,11) %}
+                        <div class="d-flex align-items-center me-3">
+                            {% for j in range(1,11) %}
+                                <input type="number" min="1" max="10" class="form-control mb-2 route-input" 
+                                       style="width:60px;" 
+                                       name="route_{{ i }}_{{ j }}"
+                                       value="{{ result.routes[i-1][j-1] if result and result.routes and i-1 < len(result.routes) and j-1 < len(result.routes[i-1]) else '' }}">
+                                {% if j < 10 %}
+                                    <span>→</span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Правая часть -->
+            <div class="col-md-4" style="margin-top: 45px;">
+                <!-- Время на действие -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">Время на действие</h6>
+                        {% for i in range(1,11) %}
+                            <div class="mb-2 align-items-center time-row d-none" data-action="{{ i }}">
+                                <span style="width: 30px; text-align: right; margin-right: 10px;">{{ i }}</span>
+                                <select name="time_dist_{{ i }}" 
+                                        class="form-select form-select-sm me-2 time-select" 
+                                        data-target="time-inputs-{{ i }}"
+                                        style="width: 130px;">
+                                    <option value="uniform" {{ 'selected' if result and result.time_dists and result.time_dists[i-1] == 'uniform' else '' }}>равномерное</option>
+                                    <option value="constant" {{ 'selected' if result and result.time_dists and result.time_dists[i-1] == 'constant' else '' }}>константное</option>
+                                </select>
+                                
+                                <div id="time-inputs-{{ i }}" class="d-flex flex-grow-1">
+                                    <!-- равномерное -->
+                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm me-1 uniform-input" 
+                                           name="time_from_{{ i }}" placeholder="от" style="width: 70px;"
+                                           value="{{ result.time_from[i-1] if result and result.time_from and i-1 < len(result.time_from) else '' }}">
+                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm uniform-input" 
+                                           name="time_to_{{ i }}" placeholder="до" style="width: 70px;"
+                                           value="{{ result.time_to[i-1] if result and result.time_to and i-1 < len(result.time_to) else '' }}">
+
+                                    <!-- константное (по умолчанию скрыто) -->
+                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm constant-input d-none" 
+                                           name="time_const_{{ i }}" placeholder="=" style="width: 140px;"
+                                           value="{{ result.time_const[i-1] if result and result.time_const and i-1 < len(result.time_const) else '' }}">
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Вероятность ошибки -->
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">Ошибки</h6>
+                        {% for i in range(1,11) %}
+                            <div class="mb-2 mb-2 error-row d-none" data-action="{{ i }}">
+                                <span style="width: 30px; text-align: right; margin-right: 10px; margin-left: 15px;">{{ i }}</span>
+                                <select name="error_action" class="form-select form-select-sm me-4">
+                                    <option value="repeat" {{ 'selected' if result and result.error_actions and result.error_actions[i-1] == 'repeat' else '' }}>повторить шаг</option>
+                                    <option value="to_start" {{ 'selected' if result and result.error_actions and result.error_actions[i-1] == 'to_start' else '' }}>вернуться в начало маршрута</option>
+                                    <option value="previous" {{ 'selected' if result and result.error_actions and result.error_actions[i-1] == 'previous' else '' }}>вернуться на предыдущий шаг</option>
+                                </select>
+                                <input type="number" step="0.01" min="0" max="1" class="form-control form-control-sm" name="error_prob" 
+                                       placeholder="Вероятность ошибки"
+                                       value="{{ result.error_probs[i-1] if result and result.error_probs and i-1 < len(result.error_probs) else '' }}">
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="mt-3 d-flex align-items-center">
+                    <label class="form-label me-3">Величина выборки (N):</label>
+                    <input type="number" min="1" class="form-control d-inline-block" style="width:120px;" name="sample_size"
+                           value="{{ result.sample_size if result and result.sample_size else '' }}">
+                    <button type="submit" class="btn btn-info ms-3">Рассчитать</button>
+                </div>
+            </div>
+        </div>
+
+        {% if result %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>Результаты</h5>
+                        <pre>{{ result | tojson(indent=2, ensure_ascii=False) }}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Переключение между равномерным и константным временем (без изменений)
+    document.querySelectorAll(".time-select").forEach(select => {
+        select.addEventListener("change", function() {
+            let targetId = this.dataset.target;
+            let container = document.getElementById(targetId);
+            let uniformInputs = container.querySelectorAll(".uniform-input");
+            let constInput = container.querySelector(".constant-input");
+
+            if (this.value === "uniform") {
+                uniformInputs.forEach(el => el.classList.remove("d-none"));
+                constInput.classList.add("d-none");
+            } else {
+                uniformInputs.forEach(el => el.classList.add("d-none"));
+                constInput.classList.remove("d-none");
+            }
+        });
+
+        // Инициализация видимости полей времени при загрузке
+        let targetId = select.dataset.target;
+        let container = document.getElementById(targetId);
+        let uniformInputs = container.querySelectorAll(".uniform-input");
+        let constInput = container.querySelector(".constant-input");
+        if (select.value === "uniform") {
+            uniformInputs.forEach(el => el.classList.remove("d-none"));
+            constInput.classList.add("d-none");
+        } else {
+            uniformInputs.forEach(el => el.classList.add("d-none"));
+            constInput.classList.remove("d-none");
+        }
+    });
+
+    // Функция для обновления видимости строк (использует d-none / d-flex)
+    function updateActionRows() {
+        // Скрываем все строки: добавляем d-none и удаляем d-flex
+        document.querySelectorAll(".time-row, .error-row").forEach(row => {
+            row.classList.remove("d-flex");
+            row.classList.add("d-none");
+            row.querySelectorAll("input, select").forEach(el => el.required = false);
+        });
+
+        // Собираем уникальные действия, которые реально введены в маршрутах
+        let usedActions = new Set();
+        document.querySelectorAll(".route-input").forEach(input => {
+            let v = input.value.trim();
+            if (!v) return;
+            let value = parseInt(v, 10);
+            if (!isNaN(value) && value >= 1 && value <= 10) {
+                usedActions.add(value);
+            }
+        });
+
+        // Показываем только нужные строки: убираем d-none и ставим d-flex
+        usedActions.forEach(action => {
+            let timeRow = document.querySelector(`.time-row[data-action="${action}"]`);
+            let errorRow = document.querySelector(`.error-row[data-action="${action}"]`);
+            
+            if (timeRow) {
+                timeRow.classList.remove("d-none");
+                timeRow.classList.add("d-flex");
+                timeRow.querySelectorAll("input, select").forEach(el => el.required = true);
+            }
+            if (errorRow) {
+                errorRow.classList.remove("d-none");
+                errorRow.classList.add("d-flex");
+                errorRow.querySelectorAll("input, select").forEach(el => el.required = true);
+            }
+        });
+    }
+
+    // Валидация ввода и привязка обновления
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+        input.addEventListener("input", function() {
+            // Удаляем нечисловые символы, кроме точки
+            this.value = this.value.replace(/[^0-9.]/g, '');
+
+            if (this.classList.contains("route-input")) {
+                let value = parseInt(this.value, 10);
+                if (isNaN(value) || value < 1) {
+                    this.value = "";
+                } else if (value > 10) {
+                    this.value = "10";
+                }
+                updateActionRows();
+            } else if (this.name.includes("route_prob") || this.name.includes("error_prob")) {
+                let value = parseFloat(this.value);
+                if (value < 0) this.value = "0";
+                if (value > 1) this.value = "1";
+            } else if (this.name.includes("sample_size")) {
+                let value = parseInt(this.value, 10);
+                if (value < 1 || isNaN(value)) this.value = "1";
+            } else {
+                let value = parseFloat(this.value);
+                if (value < 0) this.value = "0";
+            }
+        });
+    });
+
+    // Инициализация при загрузке
+    updateActionRows();
+});
+</script>
+
+
+
+</body>
+</html>
