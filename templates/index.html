@@ -221,96 +221,98 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     // --- Сбор данных для JSON ---
-    function collectFormData() {
-        const sampleSize = parseInt(document.querySelector('.sample-size-input').value);
-        
-        // Собираем маршруты
-        const routes = [];
-        const routeRows = document.querySelectorAll('.route-row');
-        const probInputs = document.querySelectorAll('.route-prob');
-        
-        routeRows.forEach((row, index) => {
-            const path = [];
-            const inputs = row.querySelectorAll('.route-input');
-            inputs.forEach(input => {
-                if (input.value.trim() !== '') {
-                    path.push(parseInt(input.value));
-                }
-            });
-            
-            const prob = parseFloat(probInputs[index].value);
-            
-            if (path.length > 0) {
-                routes.push({
-                    prob: prob,
-                    path: path
-                });
+function collectFormData() {
+    const sampleSize = parseInt(document.querySelector('.sample-size-input').value);
+    
+    // Собираем маршруты
+    const routes = [];
+    const routeRows = document.querySelectorAll('.route-row');
+    const probInputs = document.querySelectorAll('.route-prob');
+    
+    routeRows.forEach((row, index) => {
+        const path = [];
+        const inputs = row.querySelectorAll('.route-input');
+        inputs.forEach(input => {
+            if (input.value.trim() !== '') {
+                path.push(parseInt(input.value));
             }
         });
         
-        // Собираем действия
-        const actions = [];
-        const usedActions = new Set();
+        const prob = parseFloat(probInputs[index].value);
         
-        // Сначала находим все используемые действия из маршрутов
-        routeRows.forEach(row => {
-            const inputs = row.querySelectorAll('.route-input');
-            inputs.forEach(input => {
-                if (input.value.trim() !== '') {
-                    usedActions.add(parseInt(input.value));
-                }
+        if (path.length > 0) {
+            routes.push({
+                prob: prob,
+                path: path
             });
-        });
-        
-        // Собираем данные для каждого используемого действия
-        usedActions.forEach(actionId => {
-            const timeRow = document.querySelector(`.time-row[data-action="${actionId}"]`);
-            const errorRow = document.querySelector(`.error-row[data-action="${actionId}"]`);
-            
-            if (timeRow && errorRow) {
-                const timeSelect = timeRow.querySelector('.time-select');
-                const timeType = timeSelect.value === 'uniform' ? 'uniform' : 'const';
-                
-                let timeLeft = null;
-                let timeRight = null;
-                
-                if (timeType === 'uniform') {
-                    timeLeft = parseFloat(timeRow.querySelector(`input[name="time_from_${actionId}"]`).value);
-                    timeRight = parseFloat(timeRow.querySelector(`input[name="time_to_${actionId}"]`).value);
-                } else {
-                    timeLeft = parseFloat(timeRow.querySelector(`input[name="time_const_${actionId}"]`).value);
-                    timeRight = null;
-                }
-                
-                const errorSelect = errorRow.querySelector('select');
-                let errorAction = 'repeat';
-                if (errorSelect.value === 'to_start') errorAction = 'backToStart';
-                else if (errorSelect.value === 'previous') errorAction = 'backAStep';
-                else errorAction = 'repeat';
-                
-                const errorProb = parseFloat(errorRow.querySelector('input').value);
-                
-                actions.push({
-                    id: actionId,
-                    time: {
-                        type: timeType,
-                        left: timeLeft,
-                        right: timeRight
-                    },
-                    error: {
-                        action: errorAction,
-                        prob: errorProb
-                    }
-                });
+        }
+    });
+    
+    // Собираем действия
+    const actions = [];
+    const usedActions = new Set();
+    
+    // Сначала находим все используемые действия из маршрутов
+    routeRows.forEach(row => {
+        const inputs = row.querySelectorAll('.route-input');
+        inputs.forEach(input => {
+            if (input.value.trim() !== '') {
+                usedActions.add(parseInt(input.value));
             }
         });
+    });
+    
+    // Собираем данные для каждого используемого действия
+    usedActions.forEach(actionId => {
+        const timeRow = document.querySelector(`.time-row[data-action="${actionId}"]`);
+        const errorRow = document.querySelector(`.error-row[data-action="${actionId}"]`);
         
-        return {
-            N: sampleSize,
-            routes: routes,
-            actions: actions
-        };
-    }
+        if (timeRow && errorRow) {
+            const timeSelect = timeRow.querySelector('.time-select');
+            // Исправляем enum для времени
+            const timeType = timeSelect.value === 'uniform' ? 'UNIFORM' : 'CONSTANT';
+            
+            let timeLeft = null;
+            let timeRight = null;
+            
+            if (timeType === 'UNIFORM') {
+                timeLeft = parseFloat(timeRow.querySelector(`input[name="time_from_${actionId}"]`).value);
+                timeRight = parseFloat(timeRow.querySelector(`input[name="time_to_${actionId}"]`).value);
+            } else {
+                timeLeft = parseFloat(timeRow.querySelector(`input[name="time_const_${actionId}"]`).value);
+                timeRight = null;
+            }
+            
+            const errorSelect = errorRow.querySelector('select');
+            // Исправляем enum для действий при ошибке
+            let errorAction = 'REPEAT';
+            if (errorSelect.value === 'to_start') errorAction = 'BACK_TO_START';
+            else if (errorSelect.value === 'previous') errorAction = 'BACK_A_STEP';
+            else errorAction = 'REPEAT';
+            
+            const errorProb = parseFloat(errorRow.querySelector('input').value);
+            
+            actions.push({
+                id: actionId,
+                time: {
+                    type: timeType,
+                    left: timeLeft,
+                    right: timeRight
+                },
+                error: {
+                    action: errorAction,
+                    prob: errorProb
+                }
+            });
+        }
+    });
+    
+    return {
+        N: sampleSize,
+        routes: routes,
+        actions: actions
+    };
+}
 
     // --- Валидация формы и отправка запроса ---
     async function handleFormSubmit(event) {

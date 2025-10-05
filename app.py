@@ -1,30 +1,36 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
+import requests
+from flask_cors import CORS  # добавьте эту строку
 
 app = Flask(__name__)
+CORS(app)  # добавьте эту строку
 
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET"])
 def index():
-    result = None
-    if request.method == "POST":
-        # Получаем данные из формы
-        probabilities = request.form.getlist("route_prob")
-        sample_size = request.form.get("sample_size")
-        action_times = request.form.getlist("time_value")
-        error_probs = request.form.getlist("error_prob")
-        error_actions = request.form.getlist("error_action")
+    return render_template("index.html")
 
-        # Здесь можно обработать данные (пока просто показываем обратно)
-        result = {
-            "probabilities": probabilities,
-            "sample_size": sample_size,
-            "action_times": action_times,
-            "error_probs": error_probs,
-            "error_actions": error_actions
-        }
 
-    return render_template("index.html", result=result)
+@app.route("/api/calculate", methods=["POST"])
+def proxy_calculate():
+    """Прокси-эндпоинт для Java приложения"""
+    try:
+        # Получаем данные из запроса
+        data = request.get_json()
+
+        # Отправляем запрос к Java приложению
+        java_response = requests.post(
+            'http://127.0.0.1:8080/api/calculate',
+            json=data,
+            headers={'Content-Type': 'application/json'}
+        )
+
+        # Возвращаем ответ от Java приложения
+        return jsonify(java_response.json()), java_response.status_code
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
