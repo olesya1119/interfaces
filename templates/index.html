@@ -4,6 +4,32 @@
     <meta charset="UTF-8">
     <title>Маршруты</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 5px;
+            width: 300px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body class="bg-light">
 
@@ -59,25 +85,22 @@
                                         class="form-select form-select-sm me-2 time-select" 
                                         data-target="time-inputs-{{ i }}"
                                         style="width: 130px;">
-                                    <option value="uniform" {{ 'selected' if result and result.time_dists and result.time_dists[i-1] == 'uniform' else '' }}>равномерное</option>
-                                    <option value="constant" {{ 'selected' if result and result.time_dists and result.time_dists[i-1] == 'constant' else '' }}>константное</option>
+                                    <option value="uniform">равномерное</option>
+                                    <option value="constant">константное</option>
                                 </select>
                                 
                                 <div id="time-inputs-{{ i }}" class="d-flex flex-grow-1">
                                     <!-- равномерное -->
                                     <input type="number" min="0" step="0.01" class="form-control form-control-sm me-1 uniform-input" 
                                            name="time_from_{{ i }}" placeholder="от" style="width: 90px;"
-                                           value="{{ result.time_from[i-1] if result and result.time_from and i-1 < len(result.time_from) else '' }}"
                                            title="Для равномерного распределения: левое значение">
                                     <input type="number" min="0" step="0.01" class="form-control form-control-sm uniform-input" 
                                            name="time_to_{{ i }}" placeholder="до" style="width: 90px;"
-                                           value="{{ result.time_to[i-1] if result and result.time_to and i-1 < len(result.time_to) else '' }}"
                                            title="Для равномерного распределения: правое значение (должно быть больше левого)">
 
                                     <!-- константное (по умолчанию скрыто) -->
                                     <input type="number" min="0" step="0.01" class="form-control form-control-sm constant-input d-none" 
                                            name="time_const_{{ i }}" placeholder="=" style="width: 140px;"
-                                           value="{{ result.time_const[i-1] if result and result.time_const and i-1 < len(result.time_const) else '' }}"
                                            title="Константное значение времени">
                                 </div>
                             </div>
@@ -93,13 +116,12 @@
                             <div class="mb-2 error-row d-none" data-action="{{ i }}">
                                 <span style="width: 30px; text-align: right; margin-right: 10px; margin-left: 15px;">{{ i }}</span>
                                 <select name="error_action_{{ i }}" class="form-select form-select-sm me-4">
-                                    <option value="repeat" {{ 'selected' if result and result.error_actions and result.error_actions[i-1] == 'repeat' else '' }}>повторить шаг</option>
-                                    <option value="to_start" {{ 'selected' if result and result.error_actions and result.error_actions[i-1] == 'to_start' else '' }}>вернуться в начало маршрута</option>
-                                    <option value="previous" {{ 'selected' if result and result.error_actions and result.error_actions[i-1] == 'previous' else '' }}>вернуться на предыдущий шаг</option>
+                                    <option value="repeat">повторить шаг</option>
+                                    <option value="to_start">вернуться в начало маршрута</option>
+                                    <option value="previous">вернуться на предыдущий шаг</option>
                                 </select>
                                 <input type="number" step="0.01" min="0" max="1" class="form-control form-control-sm error-prob-input" 
-                                       name="error_prob_{{ i }}" placeholder="[0;1]"
-                                       value="{{ result.error_probs[i-1] if result and result.error_probs and i-1 < len(result.error_probs) else '' }}">
+                                       name="error_prob_{{ i }}" placeholder="[0;1]">
                             </div>
                         {% endfor %}
                     </div>
@@ -107,28 +129,228 @@
                 <div class="mt-3 d-flex align-items-center">
                     <label class="form-label me-3">Величина выборки (N):</label>
                     <input type="number" min="1" class="form-control d-inline-block sample-size-input" style="width:120px;" name="sample_size"
-                           value="{{ result.sample_size if result and result.sample_size else '' }}" required>
+                           value="1000" required>
                     <button type="submit" class="btn btn-info ms-3">Рассчитать</button>
                 </div>
             </div>
         </div>
+    </form>
 
-        {% if result %}
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5>Результаты</h5>
-                        <pre>{{ result | tojson(indent=2, ensure_ascii=False) }}</pre>
+    <!-- Блок для гистограммы -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Гистограмма результатов</h5>
+                    <div class="text-center mb-3">
+                        <button type="button" class="btn btn-success" id="show-histogram">Показать гистограмму</button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="histogramChart"></canvas>
+                    </div>
+                    <div class="info mt-3" id="histogramInfo" style="display: none;">
+                        <h6>Информация о гистограмме:</h6>
+                        <p id="infoText"></p>
                     </div>
                 </div>
             </div>
         </div>
-        {% endif %}
-    </form>
+    </div>
+</div>
+<!-- Добавь этот блок в HTML после блока с гистограммой -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <small>
+                <strong>Режим тестирования:</strong> Используется заглушка Java приложения. 
+                Данные генерируются случайным образом. 
+                <button class="btn btn-sm btn-outline-info ms-2" onclick="loadTestData()">Загрузить тестовые данные</button>
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для выбора интервалов -->
+<div id="binsModal" class="modal">
+    <div class="modal-content">
+        <h3>Настройка интервалов</h3>
+        <p>Использовать формулу Стерджеса (<span id="sturgesValue"></span> интервалов)?</p>
+        <button class="btn btn-primary btn-sm" onclick="useSturges()">Да</button>
+        <button class="btn btn-secondary btn-sm" onclick="showCustomBins()">Нет, задать свое</button>
+    </div>
+</div>
+
+<!-- Модальное окно для ввода своего количества интервалов -->
+<div id="customBinsModal" class="modal">
+    <div class="modal-content">
+        <h3>Задание количества интервалов</h3>
+        <p>Введите количество интервалов:</p>
+        <input type="number" id="customBinsInput" min="3" max="50" value="10" class="form-control mb-2">
+        <br>
+        <button class="btn btn-primary btn-sm" onclick="useCustomBins()">Построить</button>
+        <button class="btn btn-secondary btn-sm" onclick="closeModals()">Отмена</button>
+    </div>
 </div>
 
 <script>
+// Выносим функции в глобальную область видимости
+let chart = null;
+let currentSturgesBins = 0;
+
+// Глобальные функции для кнопок
+async function loadTestData() {
+    try {
+        const response = await fetch('/api/test-data');
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки тестовых данных');
+        }
+        
+        const data = await response.json();
+        console.log('Тестовые данные загружены:', data);
+        alert('Тестовые данные загружены! Теперь можно построить гистограмму.');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+function useSturges() {
+    closeModals();
+    createHistogram('/api/histogram');
+}
+
+function showCustomBins() {
+    document.getElementById('binsModal').style.display = 'none';
+    document.getElementById('customBinsModal').style.display = 'block';
+}
+
+async function useCustomBins() {
+    const customBins = parseInt(document.getElementById('customBinsInput').value);
+    if (customBins < 3 || customBins > 50) {
+        alert('Введите число от 3 до 50');
+        return;
+    }
+    
+    closeModals();
+    
+    try {
+        const response = await fetch('/api/histogram/custom', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ bins: customBins })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка построения гистограммы');
+        }
+        
+        const data = await response.json();
+        renderHistogram(data);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+function closeModals() {
+    document.getElementById('binsModal').style.display = 'none';
+    document.getElementById('customBinsModal').style.display = 'none';
+}
+
+// Функции для гистограммы (должны быть доступны глобально)
+async function createHistogram(endpoint) {
+    try {
+        const response = await fetch(endpoint);
+        if (!response.ok) {
+            throw new Error('Ошибка получения данных гистограммы');
+        }
+        
+        const data = await response.json();
+        renderHistogram(data);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+function renderHistogram(data) {
+    const ctx = document.getElementById('histogramChart').getContext('2d');
+    
+    // Удаляем предыдущий график если есть
+    if (chart) {
+        chart.destroy();
+    }
+    
+    // Создаем подписи для интервалов
+    const labels = data.bin_centers.map((center, index) => {
+        const left = data.bin_edges[index].toFixed(2);
+        const right = data.bin_edges[index + 1].toFixed(2);
+        return `[${left}; ${right})`;
+    });
+
+    chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Частота',
+                data: data.frequencies,
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Частота'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Интервалы'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Частота: ${context.parsed.y}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Показываем информацию о гистограмме
+    document.getElementById('histogramInfo').style.display = 'block';
+    const binsCount = data.custom_bins || data.sturges_bins;
+    document.getElementById('infoText').innerHTML = `
+        Количество интервалов: <strong>${binsCount}</strong><br>
+        Количество точек данных: <strong>${data.data_points}</strong><br>
+        Минимальное значение: <strong>${data.min_value.toFixed(4)}</strong><br>
+        Максимальное значение: <strong>${data.max_value.toFixed(4)}</strong><br>
+        Среднее значение: <strong>${data.middle_value.toFixed(4)}</strong>
+    `;
+}
+
+// Остальной код оставляем внутри DOMContentLoaded
 document.addEventListener("DOMContentLoaded", function() {
     const routesContainer = document.getElementById("routes-container");
     const probContainer = document.getElementById("prob-container");
@@ -137,12 +359,20 @@ document.addEventListener("DOMContentLoaded", function() {
     const probSumError = document.getElementById("prob-sum-error");
     const probSumInfo = document.getElementById("prob-sum-info");
     const mainForm = document.getElementById("main-form");
+    const showHistogramBtn = document.getElementById("show-histogram");
 
     let routeCount = 1;
     const maxRoutes = 10;
     const maxCells = 10;
 
-    // --- Расчет суммы вероятностей ---
+    // Убираем дублирующие объявления переменных
+    // chart и currentSturgesBins уже объявлены глобально
+
+    // Убираем дублирующие объявления функций
+    // Все функции для гистограммы уже объявлены глобально
+
+    // --- Остальные функции формы ---
+
     function calculateProbSum() {
         let sum = 0;
         document.querySelectorAll('.route-prob').forEach(input => {
@@ -154,7 +384,6 @@ document.addEventListener("DOMContentLoaded", function() {
         return sum;
     }
 
-    // --- Проверка равномерного распределения времени ---
     function validateUniformTime(action) {
         const timeRow = document.querySelector(`.time-row[data-action="${action}"]`);
         if (!timeRow) return true;
@@ -183,7 +412,6 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    // --- Проверка всех равномерных распределений ---
     function validateAllUniformTimes() {
         let allValid = true;
         document.querySelectorAll('.time-row').forEach(row => {
@@ -200,7 +428,6 @@ document.addEventListener("DOMContentLoaded", function() {
         return allValid;
     }
 
-    // --- Обновление отображения суммы вероятностей ---
     function updateProbSumDisplay() {
         const sum = calculateProbSum();
         probSumElement.textContent = sum.toFixed(2);
@@ -220,101 +447,93 @@ document.addEventListener("DOMContentLoaded", function() {
         return isSumValid;
     }
 
-    // --- Сбор данных для JSON ---
-function collectFormData() {
-    const sampleSize = parseInt(document.querySelector('.sample-size-input').value);
-    
-    // Собираем маршруты
-    const routes = [];
-    const routeRows = document.querySelectorAll('.route-row');
-    const probInputs = document.querySelectorAll('.route-prob');
-    
-    routeRows.forEach((row, index) => {
-        const path = [];
-        const inputs = row.querySelectorAll('.route-input');
-        inputs.forEach(input => {
-            if (input.value.trim() !== '') {
-                path.push(parseInt(input.value));
-            }
-        });
+    function collectFormData() {
+        const sampleSize = parseInt(document.querySelector('.sample-size-input').value);
         
-        const prob = parseFloat(probInputs[index].value);
+        const routes = [];
+        const routeRows = document.querySelectorAll('.route-row');
+        const probInputs = document.querySelectorAll('.route-prob');
         
-        if (path.length > 0) {
-            routes.push({
-                prob: prob,
-                path: path
-            });
-        }
-    });
-    
-    // Собираем действия
-    const actions = [];
-    const usedActions = new Set();
-    
-    // Сначала находим все используемые действия из маршрутов
-    routeRows.forEach(row => {
-        const inputs = row.querySelectorAll('.route-input');
-        inputs.forEach(input => {
-            if (input.value.trim() !== '') {
-                usedActions.add(parseInt(input.value));
-            }
-        });
-    });
-    
-    // Собираем данные для каждого используемого действия
-    usedActions.forEach(actionId => {
-        const timeRow = document.querySelector(`.time-row[data-action="${actionId}"]`);
-        const errorRow = document.querySelector(`.error-row[data-action="${actionId}"]`);
-        
-        if (timeRow && errorRow) {
-            const timeSelect = timeRow.querySelector('.time-select');
-            // Исправляем enum для времени
-            const timeType = timeSelect.value === 'uniform' ? 'UNIFORM' : 'CONSTANT';
-            
-            let timeLeft = null;
-            let timeRight = null;
-            
-            if (timeType === 'UNIFORM') {
-                timeLeft = parseFloat(timeRow.querySelector(`input[name="time_from_${actionId}"]`).value);
-                timeRight = parseFloat(timeRow.querySelector(`input[name="time_to_${actionId}"]`).value);
-            } else {
-                timeLeft = parseFloat(timeRow.querySelector(`input[name="time_const_${actionId}"]`).value);
-                timeRight = null;
-            }
-            
-            const errorSelect = errorRow.querySelector('select');
-            // Исправляем enum для действий при ошибке
-            let errorAction = 'REPEAT';
-            if (errorSelect.value === 'to_start') errorAction = 'BACK_TO_START';
-            else if (errorSelect.value === 'previous') errorAction = 'BACK_A_STEP';
-            else errorAction = 'REPEAT';
-            
-            const errorProb = parseFloat(errorRow.querySelector('input').value);
-            
-            actions.push({
-                id: actionId,
-                time: {
-                    type: timeType,
-                    left: timeLeft,
-                    right: timeRight
-                },
-                error: {
-                    action: errorAction,
-                    prob: errorProb
+        routeRows.forEach((row, index) => {
+            const path = [];
+            const inputs = row.querySelectorAll('.route-input');
+            inputs.forEach(input => {
+                if (input.value.trim() !== '') {
+                    path.push(parseInt(input.value));
                 }
             });
-        }
-    });
-    
-    return {
-        N: sampleSize,
-        routes: routes,
-        actions: actions
-    };
-}
+            
+            const prob = parseFloat(probInputs[index].value);
+            
+            if (path.length > 0) {
+                routes.push({
+                    prob: prob,
+                    path: path
+                });
+            }
+        });
+        
+        const actions = [];
+        const usedActions = new Set();
+        
+        routeRows.forEach(row => {
+            const inputs = row.querySelectorAll('.route-input');
+            inputs.forEach(input => {
+                if (input.value.trim() !== '') {
+                    usedActions.add(parseInt(input.value));
+                }
+            });
+        });
+        
+        usedActions.forEach(actionId => {
+            const timeRow = document.querySelector(`.time-row[data-action="${actionId}"]`);
+            const errorRow = document.querySelector(`.error-row[data-action="${actionId}"]`);
+            
+            if (timeRow && errorRow) {
+                const timeSelect = timeRow.querySelector('.time-select');
+                const timeType = timeSelect.value === 'uniform' ? 'UNIFORM' : 'CONSTANT';
+                
+                let timeLeft = null;
+                let timeRight = null;
+                
+                if (timeType === 'UNIFORM') {
+                    timeLeft = parseFloat(timeRow.querySelector(`input[name="time_from_${actionId}"]`).value);
+                    timeRight = parseFloat(timeRow.querySelector(`input[name="time_to_${actionId}"]`).value);
+                } else {
+                    timeLeft = parseFloat(timeRow.querySelector(`input[name="time_const_${actionId}"]`).value);
+                    timeRight = null;
+                }
+                
+                const errorSelect = errorRow.querySelector('select');
+                let errorAction = 'REPEAT';
+                if (errorSelect.value === 'to_start') errorAction = 'BACK_TO_START';
+                else if (errorSelect.value === 'previous') errorAction = 'BACK_A_STEP';
+                else errorAction = 'REPEAT';
+                
+                const errorProb = parseFloat(errorRow.querySelector('input').value);
+                
+                actions.push({
+                    id: actionId,
+                    time: {
+                        type: timeType,
+                        left: timeLeft,
+                        right: timeRight
+                    },
+                    error: {
+                        action: errorAction,
+                        prob: errorProb
+                    }
+                });
+            }
+        });
+        
+        return {
+            N: sampleSize,
+            routes: routes,
+            actions: actions
+        };
+    }
 
-    // --- Валидация формы и отправка запроса ---
     async function handleFormSubmit(event) {
         event.preventDefault();
         
@@ -331,11 +550,9 @@ function collectFormData() {
             return false;
         }
         
-        // Собираем данные для отправки
         const requestData = collectFormData();
         
         try {
-            // Отправляем POST запрос
             const response = await fetch('/api/calculate', {
                 method: 'POST',
                 headers: {
@@ -351,11 +568,8 @@ function collectFormData() {
             }
             
             const result = await response.json();
-            
-            // Обработка успешного ответа
             console.log('Результат:', result);
-            // Здесь можно добавить отображение результата на странице
-            alert('Расчет успешно выполнен! Результат в консоли.');
+            alert('Расчет успешно выполнен! Теперь можно построить гистограмму.');
             
         } catch (error) {
             console.error('Ошибка при отправке запроса:', error);
@@ -363,7 +577,6 @@ function collectFormData() {
         }
     }
 
-    // --- Добавить строку маршрута + поле вероятности ---
     function addRouteRow() {
         if (routeCount >= maxRoutes) return;
         routeCount++;
@@ -397,7 +610,6 @@ function collectFormData() {
         updateProbSumDisplay();
     }
 
-    // --- Добавить новую ячейку в маршруте ---
     function addRouteCell(button) {
         const row = button.closest(".route-row");
         const inputs = row.querySelectorAll(".route-input");
@@ -427,7 +639,6 @@ function collectFormData() {
         updateButtonVisibility();
     }
 
-    // --- Валидация ячеек маршрута ---
     function attachRouteInputValidation(input) {
         input.addEventListener("input", function() {
             let value = parseInt(this.value);
@@ -437,7 +648,6 @@ function collectFormData() {
         });
     }
 
-    // --- Валидация вероятности маршрута ---
     function attachProbValidation(input) {
         input.addEventListener("input", function() {
             let value = parseFloat(this.value);
@@ -447,7 +657,6 @@ function collectFormData() {
         });
     }
 
-    // --- Валидация вероятности ошибки ---
     function attachErrorProbValidation(input) {
         input.addEventListener("input", function() {
             let value = parseFloat(this.value);
@@ -456,7 +665,6 @@ function collectFormData() {
         });
     }
 
-    // --- Валидация величины выборки ---
     function attachSampleSizeValidation(input) {
         input.addEventListener("input", function() {
             let value = parseInt(this.value);
@@ -464,7 +672,6 @@ function collectFormData() {
         });
     }
 
-    // --- Валидация равномерного времени ---
     function attachUniformTimeValidation(input) {
         input.addEventListener("input", function() {
             const timeRow = this.closest('.time-row');
@@ -478,14 +685,12 @@ function collectFormData() {
         });
     }
 
-    // --- "+" кнопка в строке маршрута ---
     function attachCellButton(button) {
         button.addEventListener("click", function() {
             addRouteCell(this);
         });
     }
 
-    // --- Переключение между равномерным и константным временем ---
     function handleTimeDistributionChange(select) {
         const targetId = select.getAttribute('data-target');
         const inputsContainer = document.getElementById(targetId);
@@ -515,7 +720,6 @@ function collectFormData() {
         }
     }
 
-    // --- Отображение "Время на действие" и "Ошибки" ---
     function updateActionRows() {
         document.querySelectorAll(".time-row, .error-row").forEach(row => {
             row.classList.remove("d-flex");
@@ -548,7 +752,6 @@ function collectFormData() {
         });
     }
 
-    // --- Скрытие/показ кнопок ---
     function updateButtonVisibility() {
         if (routeCount >= maxRoutes) {
             addRouteBtn.style.display = "none";
@@ -563,7 +766,7 @@ function collectFormData() {
         });
     }
 
-    // --- Инициализация ---
+    // Инициализация
     document.querySelectorAll(".add-cell").forEach(attachCellButton);
     document.querySelectorAll(".route-input").forEach(attachRouteInputValidation);
     document.querySelectorAll(".route-prob").forEach(attachProbValidation);
@@ -578,9 +781,8 @@ function collectFormData() {
         handleTimeDistributionChange(select);
     });
     
-    // Заменяем стандартную отправку формы на нашу функцию
     mainForm.addEventListener('submit', handleFormSubmit);
-    
+    showHistogramBtn.addEventListener('click', showHistogram);
     addRouteBtn.addEventListener("click", addRouteRow);
 
     updateActionRows();
