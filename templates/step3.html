@@ -2,16 +2,156 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Третий экран</title>
+  <title>Расчёт потраченных средств</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>.field-w{max-width:260px}</style>
 </head>
 <body class="bg-light">
 <div class="container py-5">
-  <h3 class="mb-3">Третий экран</h3>
-  <p class="text-muted">Здесь потом добавим содержимое, как обсудим детали.</p>
-  <div class="d-flex gap-2">
-    <a href="{{ url_for('step', step_id=2) }}" class="btn btn-outline-secondary">Назад</a>
+  <h3 class="mb-3">Расчёт потраченных средств</h3>
+
+  <form id="smoForm" class="mb-4">
+    <div class="row g-3">
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">P1 <span class="text-danger">*</span></label>
+        <input id="p1" type="number" min="0" step="0.0001" class="form-control field-w" placeholder="≥ 0" required inputmode="decimal">
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">P2 <span class="text-danger">*</span></label>
+        <input id="p2" type="number" min="0" step="0.0001" class="form-control field-w" placeholder="≥ 0" required inputmode="decimal">
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Lambda1 <span class="text-danger">*</span></label>
+        <input id="lambda1" type="number" min="0" step="0.0001" class="form-control field-w" placeholder="≥ 0" required inputmode="decimal">
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Lambda2 <span class="text-danger">*</span></label>
+        <input id="lambda2" type="number" min="0" step="0.0001" class="form-control field-w" placeholder="≥ 0" required inputmode="decimal">
+      </div>
+
+      <!-- Новое поле N -->
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Количество циклов записи/перезаписи <span class="text-danger">*</span></label>
+        <input id="cyclesN" type="number" min="2" step="1" class="form-control field-w" placeholder="целое ≥ 2" required inputmode="numeric" pattern="[0-9]*">
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-4">
+      <button id="backBtn" type="button" class="btn btn-outline-secondary">Назад</button>
+      <button type="submit" class="btn btn-primary">Рассчитать</button>
+    </div>
+  </form>
+
+  <div id="resultCard" class="card d-none">
+    <div class="card-body">
+      <h5 class="card-title">Результат</h5>
+      <p class="mb-0">Вы теряете каждую единицу времени: <strong id="lossValue">—</strong></p>
+    </div>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('smoForm');
+  const lossValue = document.getElementById('lossValue');
+  const resultCard = document.getElementById('resultCard');
+  const backBtn = document.getElementById('backBtn');
+
+  backBtn.addEventListener('click', () => {
+    if (history.length > 1) history.back();
+    else window.location.href = "{{ url_for('step', step_id=2) }}";
+  });
+
+  // запрет минусов/экспоненты и авто-неотрицательность
+  const numericIds = ['p1','p2','lambda1','lambda2','cyclesN'];
+  function blockMinusAndExp(el){
+    el.addEventListener('keydown', (e) => {
+      const bad = ['-','+','e','E'];
+      if (bad.includes(e.key)) e.preventDefault();
+    });
+    el.addEventListener('input', () => {
+      el.value = el.value.replace(/[eE\+\-]/g, '');
+      if (el.value !== '' && Number(el.value) < 0) el.value = '0';
+    });
+    el.addEventListener('paste', () => setTimeout(() => {
+      el.value = el.value.replace(/[eE\+\-]/g, '');
+      if (el.value !== '' && Number(el.value) < 0) el.value = '0';
+    }, 0));
+  }
+  numericIds.forEach(id => blockMinusAndExp(document.getElementById(id)));
+
+  function getStepData(step){
+    try { return JSON.parse(sessionStorage.getItem(`routes_step_${step}`) || 'null'); }
+    catch{ return null; }
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const step1 = getStepData(1);
+    const step2 = getStepData(2);
+    if (!step1 || !step2) {
+      alert('Не найдены данные шагов 1 и/или 2. Сначала пройдите предыдущие шаги.');
+      return;
+    }
+
+    const p1 = parseFloat(document.getElementById('p1').value);
+    const p2 = parseFloat(document.getElementById('p2').value);
+    const lambda1 = parseFloat(document.getElementById('lambda1').value);
+    const lambda2 = parseFloat(document.getElementById('lambda2').value);
+    const N = parseInt(document.getElementById('cyclesN').value, 10);
+
+    const allNums = [p1,p2,lambda1,lambda2];
+    if (allNums.some(v => !Number.isFinite(v) || v < 0)) {
+      alert('Все поля (P1, P2, Lambda1, Lambda2) должны быть неотрицательными числами.');
+      return;
+    }
+    if (!Number.isInteger(N) || N < 2) {
+      alert('Количество циклов должно быть целым числом ≥ 2.');
+      return;
+    }
+
+    // теперь N берём из этого экрана
+    const payload = {
+      N,
+      lambda1,
+      lambda2,
+      routes1: step1.routes || [],
+      routes2: step2.routes || [],
+      actions1: step1.actions || [],
+      actions2: step2.actions || [],
+      weightWaitTime: p1,       // P1
+      weightRepairTime: p2      // P2
+    };
+
+    try{
+      const resp = await fetch('/api/smo/calculate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const text = await resp.text();
+      let value = NaN;
+      try { value = JSON.parse(text); } catch { value = parseFloat(text); }
+
+      if (!Number.isFinite(value)) {
+        alert('Ответ Java не число. Тело: ' + text.slice(0, 200));
+        return;
+      }
+
+      // округление до 4 знаков
+      lossValue.textContent = Number(value).toFixed(4);
+      resultCard.classList.remove('d-none');
+
+    } catch(err){
+      console.error(err);
+      alert('Ошибка при обращении к Java: ' + err.message);
+    }
+  });
+});
+</script>
 </body>
 </html>

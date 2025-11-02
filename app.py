@@ -2,12 +2,21 @@ from flask import Flask, render_template, request, jsonify, Response, redirect, 
 from flask_cors import CORS
 import requests
 import os
+import logging
+import json
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 CORS(app)
 
-# Адреса Java-сервиса (переопределяются переменными окружения при желании)
+# Логи
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
+logger = logging.getLogger('api')
+
+def trunc500(s: str) -> str:
+    return s if len(s) <= 500 else s[:500] + '…'
+
+# Адреса Java-сервиса
 JAVA_API_URL = os.getenv('JAVA_API_URL', 'http://127.0.0.1:8080/api/calculate')
 JAVA_SMO_API_URL = os.getenv('JAVA_SMO_API_URL', 'http://127.0.0.1:8080/api/smo/calculate')
 
@@ -38,7 +47,9 @@ def proxy_calculate():
         return jsonify({'error': 'Invalid JSON payload'}), 400
 
     try:
+        logger.info(f"{request.path} payload={trunc500(json.dumps(payload, ensure_ascii=False))}")
         r = requests.post(JAVA_API_URL, json=payload, headers={'Content-Type': 'application/json'}, timeout=15)
+        logger.info(f"{request.path} -> status={r.status_code}")
     except requests.RequestException as e:
         return jsonify({'error': 'Failed to reach Java service', 'details': str(e)}), 502
 
@@ -60,17 +71,17 @@ def proxy_smo_calculate():
         return jsonify({'error': 'Invalid JSON payload'}), 400
 
     try:
+        logger.info(f"{request.path} payload={trunc500(json.dumps(payload, ensure_ascii=False))}")
         r = requests.post(JAVA_SMO_API_URL, json=payload, headers={'Content-Type': 'application/json'}, timeout=20)
+        logger.info(f"{request.path} -> status={r.status_code}")
     except requests.RequestException as e:
         return jsonify({'error': 'Failed to reach Java service', 'details': str(e)}), 502
 
-    # Ответ «просто число» — пробрасываем как есть (text/plain) или JSON
     ct = (r.headers.get('Content-Type') or '').lower()
     if 'application/json' in ct:
         try:
             return jsonify(r.json()), r.status_code
         except ValueError:
-            # На случай если Java вернула "12.34" с JSON content-type — отдадим как текст
             return Response(r.text, status=r.status_code, mimetype='text/plain')
     return Response(r.content, status=r.status_code, mimetype=r.headers.get('Content-Type', 'text/plain'))
 
