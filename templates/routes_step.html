@@ -2,16 +2,11 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Маршруты</title>
+    <title>{{ page_title }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Chart.js для гистограммы -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .chart-container {
-            position: relative;
-            height: 400px;
-            margin-bottom: 10px;
-        }
+        .chart-container { position: relative; height: 400px; margin-bottom: 10px; }
     </style>
 </head>
 <body class="bg-light">
@@ -25,8 +20,7 @@
                 <div class="me-3" style="min-width:120px;">
                     <h6 style="padding:5px">Вероятность<br>выбрать маршрут</h6>
                     <div id="prob-container">
-                        <!-- первая строка вероятности -->
-                        <input type="number" step="0.01" min="0" max="1" class="form-control mb-2 route-prob" 
+                        <input type="number" step="0.01" min="0" max="1" class="form-control mb-2 route-prob"
                                name="route_prob_1" placeholder="[0;1]" required>
                     </div>
                     <div id="prob-sum-error" class="text-danger small mt-2" style="display: none;">
@@ -36,15 +30,14 @@
                         Сумма: <span id="prob-sum">0.00</span>
                     </div>
                 </div>
-            
+
                 <!-- Маршруты -->
                 <div class="flex-grow-1" style="min-width: 400px;">
-                    <h5 class="text-center">Маршруты</h5>
+                    <h5 class="text-center">{{ page_title }}</h5>
                     <hr>
                     <div id="routes-container" style="max-height: 500px; overflow-y: auto;">
-                        <!-- первая строка маршрута -->
                         <div class="route-row d-flex align-items-center mb-2 flex-nowrap" style="overflow-x: auto;">
-                            <input type="number" min="1" max="10" class="form-control route-input me-2" 
+                            <input type="number" min="1" max="10" class="form-control route-input me-2"
                                    style="width:60px; flex: 0 0 auto;" name="route_1_1" required>
                             <button type="button" class="btn btn-success btn-sm add-cell flex-shrink-0">+</button>
                         </div>
@@ -62,57 +55,55 @@
                     <div class="card-body">
                         <h6 class="card-title">Время на действие</h6>
                         {% for i in range(1,11) %}
-                            <div class="mb-2 align-items-center time-row d-none" data-action="{{ i }}">
-                                <span style="width: 30px; text-align: right; margin-right: 10px;">{{ i }}</span>
-                                <select name="time_dist_{{ i }}" 
-                                        class="form-select form-select-sm me-2 time-select" 
-                                        data-target="time-inputs-{{ i }}"
-                                        style="width: 130px;">
-                                    <option value="uniform">равномерное</option>
-                                    <option value="constant">константное</option>
-                                </select>
-                                
-                                <div id="time-inputs-{{ i }}" class="d-flex flex-grow-1">
-                                    <!-- равномерное -->
-                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm me-1 uniform-input" 
-                                           name="time_from_{{ i }}" placeholder="от" style="width: 90px;"
-                                           title="Для равномерного распределения: левое значение">
-                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm uniform-input" 
-                                           name="time_to_{{ i }}" placeholder="до" style="width: 90px;"
-                                           title="Для равномерного распределения: правое значение (должно быть больше левого)">
+                        <div class="mb-2 align-items-center time-row d-none" data-action="{{ i }}">
+                            <span style="width: 30px; text-align: right; margin-right: 10px;">{{ i }}</span>
+                            <select name="time_dist_{{ i }}" class="form-select form-select-sm me-2 time-select"
+                                    data-target="time-inputs-{{ i }}" style="width: 130px;">
+                                <option value="uniform">равномерное</option>
+                                <option value="constant">константное</option>
+                            </select>
 
-                                    <!-- константное (по умолчанию скрыто) -->
-                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm constant-input d-none" 
-                                           name="time_const_{{ i }}" placeholder="=" style="width: 140px;"
-                                           title="Константное значение времени">
-                                </div>
+                            <div id="time-inputs-{{ i }}" class="d-flex flex-grow-1">
+                                <input type="number" min="0" step="0.01" class="form-control form-control-sm me-1 uniform-input"
+                                       name="time_from_{{ i }}" placeholder="от" style="width: 90px;"
+                                       title="Для равномерного распределения: левое значение">
+                                <input type="number" min="0" step="0.01" class="form-control form-control-sm uniform-input"
+                                       name="time_to_{{ i }}" placeholder="до" style="width: 90px;"
+                                       title="Для равномерного распределения: правое значение (должно быть больше левого)">
+                                <input type="number" min="0" step="0.01" class="form-control form-control-sm constant-input d-none"
+                                       name="time_const_{{ i }}" placeholder="=" style="width: 140px;"
+                                       title="Константное значение времени">
                             </div>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
 
-                <!-- Вероятность ошибки -->
+                <!-- Ошибки -->
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-title">Ошибки</h6>
                         {% for i in range(1,11) %}
-                            <div class="mb-2 error-row d-none" data-action="{{ i }}">
-                                <span style="width: 30px; text-align: right; margin-right: 10px; margin-left: 15px;">{{ i }}</span>
-                                <select name="error_action_{{ i }}" class="form-select form-select-sm me-4">
-                                    <option value="repeat">повторить шаг</option>
-                                    <option value="to_start">вернуться в начало маршрута</option>
-                                    <option value="previous">вернуться на предыдущий шаг</option>
-                                </select>
-                                <input type="number" step="0.01" min="0" max="1" class="form-control form-control-sm error-prob-input" 
-                                       name="error_prob_{{ i }}" placeholder="[0;1]">
-                            </div>
+                        <div class="mb-2 error-row d-none" data-action="{{ i }}">
+                            <span style="width: 30px; text-align: right; margin-right: 10px; margin-left: 15px;">{{ i }}</span>
+                            <select name="error_action_{{ i }}" class="form-select form-select-sm me-4">
+                                <option value="repeat">повторить шаг</option>
+                                <option value="to_start">вернуться в начало маршрута</option>
+                                <option value="previous">вернуться на предыдущий шаг</option>
+                            </select>
+                            <!-- Ограничение [0; 0.7] -->
+                            <input type="number" step="0.01" min="0" max="0.7"
+                                   class="form-control form-control-sm error-prob-input"
+                                   name="error_prob_{{ i }}" placeholder="[0;0.7]">
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
+
                 <div class="mt-3 d-flex align-items-center">
                     <label class="form-label me-3">Величина выборки (N):</label>
-                    <input type="number" min="1" class="form-control d-inline-block sample-size-input" style="width:120px;" name="sample_size"
-                           value="1000" required>
+                    <input type="number" min="1" class="form-control d-inline-block sample-size-input"
+                           style="width:120px;" name="sample_size" value="1000" required>
                     <button type="submit" class="btn btn-info ms-3">Рассчитать</button>
                 </div>
             </div>
@@ -145,10 +136,18 @@
             </div>
         </div>
     </div>
+
+    <!-- Кнопка "Далее" (блокирована до успешного расчёта/валидации) -->
+    <div class="d-flex justify-content-end mt-3">
+        <button id="nextBtn" class="btn btn-primary" type="button" disabled
+                data-next-href="{{ url_for('step', step_id=step_id + 1) }}">
+            Далее
+        </button>
+    </div>
 </div>
 
 <script>
-let lastResult = null; // массив чисел из /api/calculate
+let lastUsedTimes = null; // сюда кладём result[].usedTime из /api/calculate
 let chart = null;
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -167,6 +166,14 @@ document.addEventListener("DOMContentLoaded", function() {
     const hintNoData = document.getElementById('hintNoData');
     const histogramWrap = document.getElementById('histogramWrap');
     const histogramInfo = document.getElementById('histogramInfo');
+
+    // next
+    const nextBtn = document.getElementById('nextBtn');
+    nextBtn.addEventListener('click', () => {
+        if (!nextBtn.disabled) {
+            window.location.href = nextBtn.dataset.nextHref;
+        }
+    });
 
     let routeCount = 1;
     const maxRoutes = 10;
@@ -188,8 +195,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const select = timeRow.querySelector('.time-select');
         if (select.value !== 'uniform') return true;
         const fromInput = timeRow.querySelector('input[name="time_from_' + action + '"]');
-        theTo = timeRow.querySelector('input[name="time_to_' + action + '"]'); /* keep variable name consistent */
-        const toInput = theTo;
+        const toInput = timeRow.querySelector('input[name="time_to_' + action + '"]');
         const fromValue = parseFloat(fromInput.value);
         const toValue = parseFloat(toInput.value);
         if (isNaN(fromValue) || isNaN(toValue) || toValue <= fromValue) {
@@ -279,7 +285,9 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (errorSelect.value === 'to_start') errorAction = 'BACK_TO_START';
                 else if (errorSelect.value === 'previous') errorAction = 'BACK_A_STEP';
 
-                const errorProb = parseFloat(errorRow.querySelector('input').value);
+                // вероятность ошибки ограничена 0.7
+                const errorProbInput = errorRow.querySelector('input');
+                const errorProb = parseFloat(errorProbInput.value);
 
                 actions.push({
                     id: actionId,
@@ -294,6 +302,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
     async function handleFormSubmit(event) {
         event.preventDefault();
+
+        // валидации перед отправкой
         const isProbSumValid = updateProbSumDisplay();
         const isUniformTimeValid = validateAllUniformTimes();
         if (!isProbSumValid) {
@@ -306,6 +316,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         const requestData = collectFormData();
+
         try {
             const response = await fetch('/api/calculate', {
                 method: 'POST',
@@ -315,24 +326,30 @@ document.addEventListener("DOMContentLoaded", function() {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const result = await response.json();
 
-            // Сохраняем данные для гистограммы
-            lastResult = Array.isArray(result.result) ? result.result : null;
+            // Берём usedTime из ответа Java
+            const items = Array.isArray(result.result) ? result.result : [];
+            lastUsedTimes = items
+                .map(it => (it && typeof it.usedTime === 'number') ? it.usedTime : Number(it?.usedTime))
+                .filter(v => Number.isFinite(v));
 
-            // показываем секцию гистограммы только после успешного расчёта
-            if (lastResult && lastResult.length) {
-                histogramSection.classList.remove('d-none');     // показать блок
-                hintNoData.classList.add('d-none');              // убрать подсказку
-                // сброс возможной прошлой гистограммы
+            if (lastUsedTimes.length) {
+                histogramSection.classList.remove('d-none'); // показать блок гистограммы
+                hintNoData.classList.add('d-none');
                 if (chart) { chart.destroy(); chart = null; }
                 histogramWrap.classList.add('d-none');
                 histogramInfo.classList.add('d-none');
-                // прокрутка к блоку
+
+                // ВАЖНО: включаем кнопку «Далее» после успешной валидации + удачного ответа Java
+                nextBtn.disabled = false;
+
+                // аккуратный скролл к блоку
                 histogramSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } else {
                 hintNoData.classList.remove('d-none');
+                alert('Java вернул результат без usedTime. Проверьте ответ.');
             }
 
-            alert('Расчёт успешно выполнен! Теперь можно построить гистограмму.');
+            // УБРАНО: никаких alert-ов об успешном расчёте
 
         } catch (error) {
             console.error('Ошибка при отправке запроса:', error);
@@ -418,11 +435,13 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    // Ограничиваем вероятность ошибки до 0.7
     function attachErrorProbValidation(input) {
         input.addEventListener("input", function() {
             let value = parseFloat(this.value);
-            if (isNaN(value) || value < 0) this.value = "0";
-            else if (value > 1) this.value = "1";
+            if (isNaN(value) || value < 0) value = 0;
+            if (value > 0.7) value = 0.7;
+            this.value = value.toString();
         });
     }
 
@@ -445,9 +464,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function attachCellButton(button) {
-        button.addEventListener("click", function() {
-            addRouteCell(this);
-        });
+        button.addEventListener("click", function() { addRouteCell(this); });
     }
 
     function handleTimeDistributionChange(select) {
@@ -455,12 +472,9 @@ document.addEventListener("DOMContentLoaded", function() {
         const inputsContainer = document.getElementById(targetId);
         const uniformInputs = inputsContainer.querySelectorAll('.uniform-input');
         const constantInput = inputsContainer.querySelector('.constant-input');
-        
+
         if (select.value === 'uniform') {
-            uniformInputs.forEach(input => {
-                input.classList.remove('d-none');
-                input.required = true;
-            });
+            uniformInputs.forEach(input => { input.classList.remove('d-none'); input.required = true; });
             constantInput.classList.add('d-none');
             constantInput.required = false;
             const timeRow = select.closest('.time-row');
@@ -506,16 +520,17 @@ document.addEventListener("DOMContentLoaded", function() {
                 errorRow.classList.remove("d-none");
                 errorRow.classList.add("d-flex");
                 errorRow.querySelectorAll("input, select").forEach(el => el.required = true);
+                // применяем ограничение 0.7 на только что показанные input'ы
+                const errInput = errorRow.querySelector('.error-prob-input');
+                if (errInput) attachErrorProbValidation(errInput);
             }
         });
     }
 
     function updateButtonVisibility() {
-        if (routeCount >= maxRoutes) {
-            addRouteBtn.style.display = "none";
-        } else {
-            addRouteBtn.style.display = "inline-block";
-        }
+        if (routeCount >= maxRoutes) addRouteBtn.style.display = "none";
+        else addRouteBtn.style.display = "inline-block";
+
         document.querySelectorAll(".route-row").forEach(row => {
             const addCellBtn = row.querySelector(".add-cell");
             const cellCount = row.querySelectorAll(".route-input").length;
@@ -523,10 +538,8 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // ----- HiDPI-хелпер для канваса -----
+    // HiDPI-хелпер
     function makeCrispCanvas(canvas, heightPx = 400) {
-        // показываем обёртку (на случай если она скрыта), чтобы ширина не была 0
-        // делаем это в renderHistogram, здесь — только helper
         const dpr = window.devicePixelRatio || 1;
         canvas.style.width = '100%';
         canvas.style.height = heightPx + 'px';
@@ -537,15 +550,15 @@ document.addEventListener("DOMContentLoaded", function() {
         return dpr;
     }
 
-    // ----- гистограмма -----
+    // Гистограмма
     buildBtn.addEventListener('click', () => {
-        if (!Array.isArray(lastResult) || lastResult.length === 0) {
+        if (!Array.isArray(lastUsedTimes) || lastUsedTimes.length === 0) {
             alert('Нет данных. Сначала выполните расчёт.');
             return;
         }
         const custom = parseInt(binsInput.value);
         const bins = Number.isInteger(custom) ? Math.max(3, Math.min(50, custom)) : null;
-        renderHistogram(lastResult, bins);
+        renderHistogram(lastUsedTimes, bins);
     });
 
     function renderHistogram(values, customBins = null) {
@@ -554,7 +567,6 @@ document.addEventListener("DOMContentLoaded", function() {
         const maxVal = Math.max(...values);
         const mean = values.reduce((a,b)=>a+b,0) / n;
 
-        // Кол-во интервалов: кастом или Стерджес
         let k = customBins ?? (Math.ceil(Math.log2(n)) + 1);
         k = Math.max(3, Math.min(50, k));
 
@@ -562,7 +574,6 @@ document.addEventListener("DOMContentLoaded", function() {
         let binEdges = [];
 
         if (range === 0) {
-            // все значения одинаковы — сделаем 3 узких интервала вокруг значения
             const w = Math.max(1e-6, Math.abs(minVal) * 0.01 || 0.5);
             binEdges = [minVal - w, minVal, minVal + w, minVal + 2*w];
             k = 3;
@@ -579,19 +590,16 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         }
 
-        // Подписи бинов: прорежаем, чтобы было читаемо
         const rawLabels = [];
         for (let i = 0; i < k; i++) {
             rawLabels.push(`[${binEdges[i].toFixed(2)}; ${binEdges[i+1].toFixed(2)})`);
         }
-        const showEvery = Math.ceil(k / 12); // не более ~12 подписей
+        const showEvery = Math.ceil(k / 12);
         const labels = rawLabels.map((l, i) => (i % showEvery === 0 ? l : ''));
 
-        // Показать обёртку ПЕРЕД измерением ширины
         histogramWrap.classList.remove('d-none');
 
         const canvas = document.getElementById('histogramChart');
-        // Подгоняем под DPR вручную, Chart.js просим DPR не трогать
         makeCrispCanvas(canvas, 400);
         const ctx = canvas.getContext('2d');
 
@@ -600,9 +608,9 @@ document.addEventListener("DOMContentLoaded", function() {
             type: 'bar',
             data: { labels, datasets: [{ label: 'Частота', data: frequencies }]},
             options: {
-                responsive: false,           // сами управляем размером буфера
+                responsive: false,
                 maintainAspectRatio: false,
-                devicePixelRatio: 1,         // не дублируем масштабирование
+                devicePixelRatio: 1,
                 animation: false,
                 scales: {
                     y: {
@@ -613,12 +621,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     },
                     x: {
                         title: { display: true, text: 'Интервалы' },
-                        ticks: {
-                            autoSkip: false,   // мы уже проредили labels
-                            maxRotation: 0,
-                            minRotation: 0,
-                            font: { size: 12 }
-                        },
+                        ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, font: { size: 12 } },
                         grid: { display: false }
                     }
                 },
@@ -627,10 +630,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     tooltip: {
                         titleFont: { size: 12 },
                         bodyFont: { size: 12 },
-                        callbacks: {
-                            // показываем точную подпись даже если на оси пустая строка
-                            title: (items) => rawLabels[items[0].dataIndex] || ''
-                        }
+                        callbacks: { title: (items) => rawLabels[items[0].dataIndex] || '' }
                     }
                 }
             }
@@ -640,25 +640,39 @@ document.addEventListener("DOMContentLoaded", function() {
         document.getElementById('infoText').innerHTML =
             `Интервалов: <strong>${k}</strong> · ` +
             `Точек: <strong>${n}</strong> · ` +
-            `Мин: <strong>${minVal.toFixed(4)}</strong> · ` +
-            `Макс: <strong>${maxVal.toFixed(4)}</strong> · ` +
-            `Среднее: <strong>${mean.toFixed(4)}</strong>`;
+            `Мин usedTime: <strong>${minVal.toFixed(4)}</strong> · ` +
+            `Макс usedTime: <strong>${maxVal.toFixed(4)}</strong> · ` +
+            `Среднее usedTime: <strong>${mean.toFixed(4)}</strong>`;
     }
 
     // Инициализация
-    document.querySelectorAll(".add-cell").forEach(attachCellButton);
-    document.querySelectorAll(".route-input").forEach(attachRouteInputValidation);
-    document.querySelectorAll(".route-prob").forEach(attachProbValidation);
+    document.querySelectorAll(".add-cell").forEach(btn => btn.addEventListener("click", function(){ addRouteCell(this); }));
+    document.querySelectorAll(".route-input").forEach(input => input.addEventListener("input", function(){
+        let v = parseInt(this.value);
+        if (isNaN(v) || v < 1) this.value = "";
+        else if (v > 10) this.value = "10";
+        updateActionRows();
+    }));
+    document.querySelectorAll(".route-prob").forEach(input => input.addEventListener("input", function(){
+        let v = parseFloat(this.value);
+        if (isNaN(v) || v < 0) this.value = "0";
+        else if (v > 1) this.value = "1";
+        updateProbSumDisplay();
+    }));
     document.querySelectorAll(".error-prob-input").forEach(attachErrorProbValidation);
-    document.querySelectorAll(".sample-size-input").forEach(attachSampleSizeValidation);
+    document.querySelectorAll(".sample-size-input").forEach(input => input.addEventListener("input", function(){
+        let v = parseInt(this.value);
+        if (isNaN(v) || v < 1) this.value = "1";
+    }));
     document.querySelectorAll('.uniform-input').forEach(attachUniformTimeValidation);
     document.querySelectorAll('.time-select').forEach(select => {
         select.addEventListener('change', function() { handleTimeDistributionChange(this); });
+        // инициализация
         handleTimeDistributionChange(select);
     });
 
     mainForm.addEventListener('submit', handleFormSubmit);
-    addRouteBtn.addEventListener("click", addRouteRow);
+    addRouteBtn.addEventListener("click", function(){ addRouteRow(); });
 
     updateActionRows();
     updateButtonVisibility();
