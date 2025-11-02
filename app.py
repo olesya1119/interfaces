@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import requests
-import math
 import random
 import json
 import os
@@ -41,32 +40,10 @@ def save_calculation_data(result_data, middle_value):
 def load_calculation_data(calculation_id):
     """Загружает данные расчета из файла"""
     filename = f"{DATA_DIR}/calculation_{calculation_id}.json"
-
     if not os.path.exists(filename):
         return None
-
     with open(filename, 'r', encoding='utf-8') as f:
         return json.load(f)
-
-
-def get_latest_calculation():
-    """Получает последний расчет"""
-    try:
-        files = [f for f in os.listdir(DATA_DIR) if f.startswith(
-            'calculation_') and f.endswith('.json')]
-        if not files:
-            return None
-
-        # Сортируем по времени создания
-        files.sort(key=lambda x: os.path.getctime(
-            os.path.join(DATA_DIR, x)), reverse=True)
-        latest_file = files[0]
-
-        with open(os.path.join(DATA_DIR, latest_file), 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Ошибка при загрузке последнего расчета: {e}")
-        return None
 
 
 @app.route("/", methods=["GET"])
@@ -109,36 +86,25 @@ def proxy_calculate():
 
     except Exception as e:
         print("Ошибка при расчете:", str(e))
-        # В случае ошибки тоже возвращаем заглушку
-        result = generate_stub_result(request.get_json())
-        calculation_id = save_calculation_data(
-            result.get('result', []),
-            result.get('middleValue', 0)
-        )
-
-        response_data = result.copy()
-        response_data['calculation_id'] = calculation_id
-
-        return jsonify(response_data), 200
+        # В случае ошибки при обращении к Java — отвечаем 500
+        return jsonify({'error': str(e)}), 500
 
 
 def generate_stub_result(data):
-    """Генерирует фиктивные данные для тестирования"""
+    """Генерирует фиктивные данные для заглушки расчёта"""
     sample_size = data.get('N', 1000)
 
-    # Генерируем реалистичные данные с нормальным распределением
+    # Генерируем «реалистичные» данные
     mean = random.uniform(10, 50)
     std_dev = random.uniform(5, 15)
 
-    # Генерируем результат как массив размера N
     result_data = []
     for _ in range(sample_size):
+        # Нормальное распределение с мягкими ограничениями
         value = random.gauss(mean, std_dev)
-        value = max(0.1, value)
-        value = min(100, value)
+        value = max(0.1, min(100, value))
         result_data.append(round(value, 4))
 
-    # Вычисляем среднее значение
     middle_value = sum(result_data) / len(result_data)
 
     return {
@@ -151,167 +117,16 @@ def generate_stub_result(data):
     }
 
 
-@app.route("/api/histogram", methods=["GET"])
-def get_histogram_data():
-    """Возвращает данные для построения гистограммы"""
-    try:
-        # Получаем последний расчет
-        calculation_data = get_latest_calculation()
-
-        if not calculation_data:
-            # Если нет сохраненных данных, генерируем тестовые
-            test_data = generate_stub_result({"N": 1000})
-            calculation_id = save_calculation_data(
-                test_data['result'],
-                test_data['middleValue']
-            )
-            calculation_data = {
-                'calculation_id': calculation_id,
-                'result': test_data['result'],
-                'middle_value': test_data['middleValue']
-            }
-
-        result_data = calculation_data['result']
-        middle_value = calculation_data['middle_value']
-
-        # Формула Стерджеса для начального количества интервалов
-        n = len(result_data)
-        if n == 0:
-            return jsonify({'error': 'Empty data'}), 400
-
-        k_sturges = math.ceil(math.log2(n)) + 1
-        k_sturges = max(3, min(k_sturges, 20))
-
-        # Вычисляем границы интервалов
-        min_val = min(result_data)
-        max_val = max(result_data)
-        range_val = max_val - min_val
-
-        # Создаем интервалы по Стерджесу
-        bin_edges = []
-        bin_width = range_val / k_sturges
-
-        for i in range(k_sturges + 1):
-            bin_edges.append(min_val + i * bin_width)
-
-        # Считаем частоты
-        frequencies = [0] * k_sturges
-        for value in result_data:
-            for i in range(k_sturges):
-                if bin_edges[i] <= value < bin_edges[i + 1]:
-                    frequencies[i] += 1
-                    break
-            else:
-                if value == bin_edges[k_sturges]:
-                    frequencies[k_sturges - 1] += 1
-
-        histogram_data = {
-            'frequencies': frequencies,
-            'bin_edges': bin_edges,
-            'bin_centers': [(bin_edges[i] + bin_edges[i + 1]) / 2 for i in range(k_sturges)],
-            'sturges_bins': k_sturges,
-            'data_points': n,
-            'min_value': min_val,
-            'max_value': max_val,
-            'middle_value': middle_value,
-            'stub_data': True,
-            'calculation_id': calculation_data.get('calculation_id', 'unknown')
-        }
-
-        return jsonify(histogram_data)
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route("/api/histogram/custom", methods=["POST"])
-def get_custom_histogram():
-    """Гистограмма с пользовательским количеством интервалов"""
-    try:
-        data = request.get_json()
-        custom_bins = data.get('bins', 0)
-
-        # Получаем последний расчет
-        calculation_data = get_latest_calculation()
-
-        if not calculation_data:
-            return jsonify({'error': 'No data available'}), 400
-
-        result_data = calculation_data['result']
-        middle_value = calculation_data['middle_value']
-
-        if custom_bins <= 0:
-            return jsonify({'error': 'Invalid number of bins'}), 400
-
-        n = len(result_data)
-        k = min(custom_bins, 50)
-
-        # Вычисляем границы интервалов
-        min_val = min(result_data)
-        max_val = max(result_data)
-        range_val = max_val - min_val
-
-        # Создаем интервалы
-        bin_edges = []
-        bin_width = range_val / k
-
-        for i in range(k + 1):
-            bin_edges.append(min_val + i * bin_width)
-
-        # Считаем частоты
-        frequencies = [0] * k
-        for value in result_data:
-            for i in range(k):
-                if bin_edges[i] <= value < bin_edges[i + 1]:
-                    frequencies[i] += 1
-                    break
-            else:
-                if value == bin_edges[k]:
-                    frequencies[k - 1] += 1
-
-        histogram_data = {
-            'frequencies': frequencies,
-            'bin_edges': bin_edges,
-            'bin_centers': [(bin_edges[i] + bin_edges[i + 1]) / 2 for i in range(k)],
-            'custom_bins': k,
-            'data_points': n,
-            'min_value': min_val,
-            'max_value': max_val,
-            'middle_value': middle_value,
-            'stub_data': True,
-            'calculation_id': calculation_data.get('calculation_id', 'unknown')
-        }
-
-        return jsonify(histogram_data)
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route("/api/test-data", methods=["GET"])
-def get_test_data():
-    """Endpoint для быстрого тестирования - возвращает готовые данные"""
-    test_data = generate_stub_result({"N": 500})
-    calculation_id = save_calculation_data(
-        test_data['result'],
-        test_data['middleValue']
-    )
-
-    response_data = test_data.copy()
-    response_data['calculation_id'] = calculation_id
-
-    return jsonify(response_data)
-
-
 @app.route("/api/calculations", methods=["GET"])
 def list_calculations():
-    """Возвращает список всех расчетов"""
+    """Возвращает список всех расчетов (последние 10)"""
     try:
-        files = [f for f in os.listdir(DATA_DIR) if f.startswith(
-            'calculation_') and f.endswith('.json')]
-        calculations = []
+        files = [f for f in os.listdir(DATA_DIR) if f.startswith('calculation_') and f.endswith('.json')]
+        files.sort(key=lambda x: os.path.getctime(os.path.join(DATA_DIR, x)))
+        files = files[-10:]
 
-        for file in files[-10:]:  # Последние 10 расчетов
+        calculations = []
+        for file in files:
             filepath = os.path.join(DATA_DIR, file)
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -333,20 +148,15 @@ def get_calculation(calculation_id):
     calculation_data = load_calculation_data(calculation_id)
     if not calculation_data:
         return jsonify({'error': 'Calculation not found'}), 404
-
     return jsonify(calculation_data)
-
-# Очистка старых файлов (опционально)
 
 
 def cleanup_old_files(max_files=20):
     """Оставляет только последние max_files расчетов"""
     try:
-        files = [f for f in os.listdir(DATA_DIR) if f.startswith(
-            'calculation_') and f.endswith('.json')]
+        files = [f for f in os.listdir(DATA_DIR) if f.startswith('calculation_') and f.endswith('.json')]
         if len(files) > max_files:
-            files.sort(key=lambda x: os.path.getctime(
-                os.path.join(DATA_DIR, x)))
+            files.sort(key=lambda x: os.path.getctime(os.path.join(DATA_DIR, x)))
             for file_to_delete in files[:-max_files]:
                 os.remove(os.path.join(DATA_DIR, file_to_delete))
                 print(f"Удален старый файл: {file_to_delete}")
@@ -355,6 +165,5 @@ def cleanup_old_files(max_files=20):
 
 
 if __name__ == "__main__":
-    # Очищаем старые файлы при запуске
     cleanup_old_files()
     app.run(host='0.0.0.0', port=5000, debug=True)
