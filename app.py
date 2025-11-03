@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, Response, redirect, url_for
+from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS
 import requests
 import os
@@ -20,25 +20,11 @@ def trunc500(s: str) -> str:
 JAVA_API_URL = os.getenv('JAVA_API_URL', 'http://127.0.0.1:8080/api/calculate')
 JAVA_SMO_API_URL = os.getenv('JAVA_SMO_API_URL', 'http://127.0.0.1:8080/api/smo/calculate')
 
+@app.get("/")
+def tabs():
+    return render_template("tabs.html")
 
-@app.route("/", methods=["GET"])
-def root():
-    return redirect(url_for('step', step_id=1))
-
-
-@app.route("/step/<int:step_id>", methods=["GET"])
-def step(step_id: int):
-    if step_id == 1:
-        return render_template("routes_step.html", step_id=1, page_title="Маршруты 1ой подтемы")
-    elif step_id == 2:
-        return render_template("routes_step.html", step_id=2, page_title="Маршруты 2ой подтемы")
-    elif step_id == 3:
-        return render_template("step3.html")
-    else:
-        return "Not Found", 404
-
-
-@app.route("/api/calculate", methods=["POST"])
+@app.post("/api/calculate")
 def proxy_calculate():
     """Прокси в Java /api/calculate"""
     try:
@@ -61,8 +47,7 @@ def proxy_calculate():
             return jsonify({'error': 'Invalid JSON from Java service'}), 502
     return Response(r.content, status=r.status_code, mimetype=r.headers.get('Content-Type', 'application/octet-stream'))
 
-
-@app.route("/api/smo/calculate", methods=["POST"])
+@app.post("/api/smo/calculate")
 def proxy_smo_calculate():
     """Прокси в Java /api/smo/calculate"""
     try:
@@ -84,7 +69,6 @@ def proxy_smo_calculate():
         except ValueError:
             return Response(r.text, status=r.status_code, mimetype='text/plain')
     return Response(r.content, status=r.status_code, mimetype=r.headers.get('Content-Type', 'text/plain'))
-
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)

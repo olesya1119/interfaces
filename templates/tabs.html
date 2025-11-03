@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Маршруты и Оценка эффективности ЧМС</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .chart-container{position:relative;height:400px;margin-bottom:10px}
+    .route-block{border:1px solid #e5e7eb;border-radius:.5rem;padding:1rem;margin-bottom:1rem;background:#fff}
+    .prob-panel{min-width:180px;max-width:220px}
+    .routes-panel{min-width:420px;flex:1 1 auto}
+  </style>
+</head>
+<body class="bg-light">
+<div class="container-fluid py-4">
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1"
+              type="button" role="tab" aria-controls="tab1" aria-selected="true">Оценка временных характеристик диалога</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab2-tab" data-bs-toggle="tab" data-bs-target="#tab2"
+              type="button" role="tab" aria-controls="tab2" aria-selected="false">Оценка эффективности человеко-машинной системы</button>
+    </li>
+  </ul>
+
+  <div class="tab-content pt-3">
+
+    <!-- TAB 1 -->
+    <div class="tab-pane fade show active" id="tab1" role="tabpanel" aria-labelledby="tab1-tab">
+      <div id="t1" class="route-block">
+        <form id="t1-form">
+          <div class="row">
+            <div class="col-md-9 d-flex align-items-start">
+              <div class="prob-panel me-3">
+                <h6 class="mb-2">Вероятность<br>выбрать маршрут</h6>
+                <div id="t1-prob-container">
+                  <input type="number" step="0.01" min="0" max="1" class="form-control mb-2 route-prob"
+                         name="route_prob_1" placeholder="[0;1]" required>
+                </div>
+                <div id="t1-prob-sum-error" class="text-danger small mt-2" style="display:none;">Сумма вероятностей должна быть равна 1</div>
+                <div id="t1-prob-sum-info" class="text-muted small mt-2">Сумма: <span id="t1-prob-sum">0.00</span></div>
+              </div>
+
+              <div class="routes-panel">
+                <h5 class="text-center" style="margin:5px">Маршруты</h5>
+                <hr class="mt-2 mb-2">
+                <div id="t1-routes-container" style="max-height:500px;overflow-y:auto;">
+                  <div class="route-row d-flex align-items-center mb-2 flex-nowrap" style="overflow-x:auto;">
+                    <input type="number" min="1" max="10" class="form-control route-input me-2"
+                           style="width:60px;flex:0 0 auto;" name="route_1_1" required>
+                    <button type="button" class="btn btn-success btn-sm add-cell flex-shrink-0">+</button>
+                  </div>
+                </div>
+                <div class="text-center mt-2">
+                  <button type="button" class="btn btn-primary btn-sm" id="t1-add-route">Добавить маршрут +</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-3" style="margin-top:45px;">
+              <div class="card mb-3">
+                <div class="card-body">
+                  <h6 class="card-title">Время на действие</h6>
+                  <div id="t1-time-holder"></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-body">
+                  <h6 class="card-title">Ошибки</h6>
+                  <div id="t1-error-holder"></div>
+                </div>
+              </div>
+
+              <div class="mt-3 d-flex align-items-center">
+                <label class="form-label me-3">Величина выборки (N):</label>
+                <input type="number" min="1" class="form-control d-inline-block sample-size-input"
+                       style="width:120px;" name="sample_size" value="1000" required>
+                <button type="submit" class="btn btn-info ms-3">Рассчитать</button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Гистограмма -->
+        <div id="t1-histogramSection" class="row mt-4 d-none">
+          <div class="col-12">
+            <div class="card"><div class="card-body">
+              <h5>Гистограмма результатов</h5>
+              <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                  <label for="t1-binsInput" class="form-label mb-0">Интервалы:</label>
+                  <input type="number" id="t1-binsInput" class="form-control form-control-sm" min="3" max="50" placeholder="авто">
+                </div>
+                <div class="col-auto">
+                  <button type="button" class="btn btn-success btn-sm" id="t1-buildHistogram">Построить</button>
+                </div>
+                <div class="col-auto text-muted small" id="t1-hintNoData">(сначала выполните расчёт)</div>
+              </div>
+              <div class="chart-container mt-3 d-none" id="t1-histogramWrap">
+                <canvas id="t1-histogramChart"></canvas>
+              </div>
+              <div class="mt-2 d-none" id="t1-histogramInfo">
+                <small id="t1-infoText"></small>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2 -->
+    <div class="tab-pane fade" id="tab2" role="tabpanel" aria-labelledby="tab2-tab">
+
+      <!-- Блок 1 -->
+      <div id="b1" class="route-block">
+        <div class="row">
+          <div class="col-md-9 d-flex align-items-start">
+            <div class="prob-panel me-3">
+              <h6 class="mb-2">Вероятность<br>выбрать маршрут</h6>
+              <div id="b1-prob-container">
+                <input type="number" step="0.01" min="0" max="1" class="form-control mb-2 route-prob"
+                       name="route_prob_1" placeholder="[0;1]" required>
+              </div>
+              <div id="b1-prob-sum-error" class="text-danger small mt-2" style="display:none;">Сумма вероятностей должна быть равна 1</div>
+              <div id="b1-prob-sum-info" class="text-muted small mt-2">Сумма: <span id="b1-prob-sum">0.00</span></div>
+            </div>
+
+            <div class="routes-panel">
+              <h5 class="text-center" style="margin:5px">Маршруты для обработки</h5>
+              <hr class="mt-2 mb-2">
+              <div id="b1-routes-container" style="max-height:500px;overflow-y:auto;">
+                <div class="route-row d-flex align-items-center mb-2 flex-nowrap" style="overflow-x:auto;">
+                  <input type="number" min="1" max="10" class="form-control route-input me-2"
+                         style="width:60px;flex:0 0 auto;" name="route_1_1" required>
+                  <button type="button" class="btn btn-success btn-sm add-cell flex-shrink-0">+</button>
+                </div>
+              </div>
+              <div class="text-center mt-2">
+                <button type="button" class="btn btn-primary btn-sm" id="b1-add-route">Добавить маршрут +</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-3" style="margin-top:45px;">
+            <div class="card mb-3">
+              <div class="card-body">
+                <h6 class="card-title">Время на действие</h6>
+                <div id="b1-time-holder"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-body">
+                <h6 class="card-title">Ошибки</h6>
+                <div id="b1-error-holder"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Блок 2 -->
+      <div id="b2" class="route-block">
+        <div class="row">
+          <div class="col-md-9 d-flex align-items-start">
+            <div class="prob-panel me-3">
+              <h6 class="mb-2">Вероятность<br>выбрать маршрут</h6>
+              <div id="b2-prob-container">
+                <input type="number" step="0.01" min="0" max="1" class="form-control mb-2 route-prob"
+                       name="route_prob_1" placeholder="[0;1]" required>
+              </div>
+              <div id="b2-prob-sum-error" class="text-danger small mt-2" style="display:none;">Сумма вероятностей должна быть равна 1</div>
+              <div id="b2-prob-sum-info" class="text-muted small mt-2">Сумма: <span id="b2-prob-sum">0.00</span></div>
+            </div>
+
+            <div class="routes-panel">
+              <h5 class="text-center" style="margin:5px">Маршруты для восстановления</h5>
+              <hr class="mt-2 mb-2">
+              <div id="b2-routes-container" style="max-height:500px;overflow-y:auto;">
+                <div class="route-row d-flex align-items-center mb-2 flex-nowrap" style="overflow-x:auto;">
+                  <input type="number" min="1" max="10" class="form-control route-input me-2"
+                         style="width:60px;flex:0 0 auto;" name="route_1_1" required>
+                  <button type="button" class="btn btn-success btn-sm add-cell flex-shrink-0">+</button>
+                </div>
+              </div>
+              <div class="text-center mt-2">
+                <button type="button" class="btn btn-primary btn-sm" id="b2-add-route">Добавить маршрут +</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-3" style="margin-top:45px;">
+            <div class="card mb-3">
+              <div class="card-body">
+                <h6 class="card-title">Время на действие</h6>
+                <div id="b2-time-holder"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-body">
+                <h6 class="card-title">Ошибки</h6>
+                <div id="b2-error-holder"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Параметры SМО -->
+      <div class="route-block">
+        <form id="smoForm">
+          <div class="row g-3">
+            <div class="col-sm-6 col-md-3">
+              <label class="form-label">Стоимость для обслуживания <span class="text-danger">*</span></label>
+              <input id="p1" type="number" min="0" step="0.0001" class="form-control" placeholder="≥ 0" required inputmode="decimal">
+            </div>
+            <div class="col-sm-6 col-md-3">
+              <label class="form-label">Стоимость для восстановления <span class="text-danger">*</span></label>
+              <input id="p2" type="number" min="0" step="0.0001" class="form-control" placeholder="≥ 0" required inputmode="decimal">
+            </div>
+            <div class="col-sm-6 col-md-3">
+              <label class="form-label">Интенсивность потока запросов <span class="text-danger">*</span></label>
+              <input id="lambda1" type="number" min="0" step="0.0001" class="form-control" placeholder="≥ 0" required inputmode="decimal">
+            </div>
+            <div class="col-sm-6 col-md-3">
+              <label class="form-label">Интенсивность потока отказов <span class="text-danger">*</span></label>
+              <input id="lambda2" type="number" min="0" step="0.0001" class="form-control" placeholder="≥ 0" required inputmode="decimal">
+            </div>
+            <div class="col-sm-6 col-md-3">
+              <label class="form-label">Количество циклов работы восстановления <span class="text-danger">*</span></label>
+              <input id="cyclesN" type="number" min="2" step="1" class="form-control" placeholder="целое ≥ 2" required inputmode="numeric" pattern="[0-9]*">
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">Рассчитать</button>
+          </div>
+        </form>
+
+        <div id="resultCard" class="card d-none mt-3">
+          <div class="card-body">
+            <h5 class="card-title">Результат</h5>
+            <p class="mb-0">Вы теряете каждую единицу времени: <strong id="lossValue">—</strong></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+/* ===== генерация отдельных рядов времени и ошибок ===== */
+function initTimeErrorRows(timeSel, errorSel, prefix){
+  const timeHolder  = document.querySelector(timeSel);
+  const errorHolder = document.querySelector(errorSel);
+  timeHolder.innerHTML = ''; errorHolder.innerHTML = '';
+
+  for (let i=1;i<=10;i++){
+    const t = document.createElement('div');
+    t.className = 'mb-2 align-items-center time-row d-none';
+    t.setAttribute('data-action', i);
+    t.innerHTML = `
+      <span style="width:30px;text-align:right;margin-right:10px;">${i}</span>
+      <select class="form-select form-select-sm me-2 time-select" data-target="${prefix}-time-inputs-${i}" style="width:130px;">
+        <option value="uniform">равномерное</option>
+        <option value="constant">константное</option>
+      </select>
+      <div id="${prefix}-time-inputs-${i}" class="d-flex flex-grow-1">
+        <input type="number" min="0" step="0.01" class="form-control form-control-sm me-1 uniform-input"
+               name="time_from_${i}" placeholder="от" style="width:90px;" title="Для равномерного распределения: левое значение">
+        <input type="number" min="0" step="0.01" class="form-control form-control-sm uniform-input"
+               name="time_to_${i}" placeholder="до" style="width:90px;"
+               title="Для равномерного распределления: правое значение (должно быть больше левого)">
+        <input type="number" min="0" step="0.01" class="form-control form-control-sm constant-input d-none"
+               name="time_const_${i}" placeholder="=" style="width:140px;" title="Константное значение времени">
+      </div>
+    `;
+    timeHolder.appendChild(t);
+
+    const e = document.createElement('div');
+    e.className = 'mb-2 error-row d-none';
+    e.setAttribute('data-action', i);
+    e.innerHTML = `
+      <span style="width:30px;text-align:right;margin-right:10px;margin-left:15px;">${i}</span>
+      <select class="form-select form-select-sm me-4">
+        <option value="repeat">повторить шаг</option>
+        <option value="to_start">вернуться в начало маршрута</option>
+        <option value="previous">вернуться на предыдущий шаг</option>
+      </select>
+      <input type="number" step="0.01" min="0" max="0.7" class="form-control form-control-sm error-prob-input" placeholder="[0;0.7]">
+    `;
+    errorHolder.appendChild(e);
+  }
+}
+
+/* ===== инициализация блока маршрутов (с делегированием событий) ===== */
+function initRoutesBlock(cfg){
+  const root = document.getElementById(cfg.id);
+  const routesContainer = root.querySelector(`#${cfg.id}-routes-container`);
+  const probContainer   = root.querySelector(`#${cfg.id}-prob-container`);
+  const addRouteBtn     = root.querySelector(`#${cfg.id}-add-route`);
+  const probSumElement  = root.querySelector(`#${cfg.id}-prob-sum`);
+  const probSumError    = root.querySelector(`#${cfg.id}-prob-sum-error`);
+  const probSumInfo     = root.querySelector(`#${cfg.id}-prob-sum-info`);
+
+  initTimeErrorRows(cfg.timeHolder, cfg.errorHolder, cfg.id);
+
+  let routeCount=1; const maxRoutes=10, maxCells=10;
+
+  function calculateProbSum(){ let s=0; root.querySelectorAll('.route-prob').forEach(i=>{const v=parseFloat(i.value); if(!isNaN(v)) s+=v;}); return s; }
+  function updateProbSumDisplay(){
+    const sum = calculateProbSum(); if (probSumElement) probSumElement.textContent = sum.toFixed(2);
+    const ok = Math.abs(sum-1) < 0.001;
+    if (probSumError) probSumError.style.display = ok ? 'none' : 'block';
+    if (probSumInfo) { probSumInfo.classList.toggle('text-danger', !ok); probSumInfo.classList.toggle('text-muted', ok); }
+    return ok;
+  }
+  function validateUniformTime(action){
+    const row = root.querySelector(`.time-row[data-action="${action}"]`); if(!row) return true;
+    const sel = row.querySelector('.time-select'); if(sel.value!=='uniform') return true;
+    const fromI=row.querySelector(`input[name="time_from_${action}"]`);
+    const toI  =row.querySelector(`input[name="time_to_${action}"]`);
+    const a=parseFloat(fromI.value), b=parseFloat(toI.value);
+    const ok=!isNaN(a)&&!isNaN(b)&&b>a;
+    fromI.classList.toggle('is-invalid',!ok); toI.classList.toggle('is-invalid',!ok);
+    fromI.title= ok?"Для равномерного распределения: левое значение":"Ошибка: правое значение должно быть БОЛЬШЕ левого";
+    toI.title  = ok?"Для равномерного распределения: правое значение (должно быть больше левого)":"Ошибка: правое значение должно быть БОЛЬШЕ левого";
+    return ok;
+  }
+  function validateAllUniformTimes(){ let ok=true; root.querySelectorAll('.time-row').forEach(r=>{ if(!r.classList.contains('d-none')){ const a=r.getAttribute('data-action'); const s=r.querySelector('.time-select'); if(s.value==='uniform' && !validateUniformTime(a)) ok=false; } }); return ok; }
+
+  function updateActionRows(){
+    root.querySelectorAll(".time-row, .error-row").forEach(r=>{ r.classList.remove("d-flex"); r.classList.add("d-none"); r.querySelectorAll("input,select").forEach(el=>el.required=false); });
+    const used=new Set(); root.querySelectorAll(".route-input").forEach(inp=>{ const v=inp.value.trim(); if(!v) return; const n=parseInt(v,10); if(!isNaN(n)&&n>=1&&n<=10) used.add(n); });
+    used.forEach(a=>{
+      const t=root.querySelector(`.time-row[data-action="${a}"]`);
+      const e=root.querySelector(`.error-row[data-action="${a}"]`);
+      if(t){ t.classList.remove("d-none"); t.classList.add("d-flex"); const s=t.querySelector('.time-select'); handleTimeDistributionChange(s); }
+      if(e){ e.classList.remove("d-none"); e.classList.add("d-flex"); e.querySelectorAll("input,select").forEach(el=>el.required=true);
+             const err=e.querySelector('.error-prob-input'); if(err){ err.addEventListener('input', ()=>{ let v=parseFloat(err.value); if(isNaN(v)||v<0) v=0; if(v>0.7) v=0.7; err.value=v.toString(); }); } }
+    });
+  }
+  function handleTimeDistributionChange(sel){
+    const targetId=sel.getAttribute('data-target'); const cont=root.querySelector('#'+targetId);
+    const u=cont.querySelectorAll('.uniform-input'); const c=cont.querySelector('.constant-input');
+    if(sel.value==='uniform'){ u.forEach(i=>{i.classList.remove('d-none'); i.required=true;}); c.classList.add('d-none'); c.required=false;
+      const row=sel.closest('.time-row'); const a=row.getAttribute('data-action'); validateUniformTime(a);
+    } else { u.forEach(i=>{i.classList.add('d-none'); i.required=false; i.classList.remove('is-invalid'); i.title="Для равномерного распределения: левое значение";}); c.classList.remove('d-none'); c.required=true; }
+  }
+
+  // Добавление новой строки маршрута
+  function addRouteRow(){
+    if(routeCount>=maxRoutes) return; routeCount++;
+    const row=document.createElement("div");
+    row.className="route-row d-flex align-items-center mb-2 flex-nowrap";
+    row.style.overflowX="auto";
+    row.innerHTML=`<input type="number" min="1" max="10" class="form-control route-input me-2" style="width:60px;flex:0 0 auto;" name="route_${routeCount}_1" required>
+                   <button type="button" class="btn btn-success btn-sm add-cell flex-shrink-0">+</button>`;
+    routesContainer.appendChild(row);
+
+    const p=document.createElement("input");
+    p.type="number"; p.min="0"; p.max="1"; p.step="0.01"; p.required=true;
+    p.placeholder="[0;1]"; p.className="form-control mb-2 route-prob"; p.name=`route_prob_${routeCount}`;
+    probContainer.appendChild(p);
+
+    updateActionRows(); // показать нужные time/error строки
+    updateProbSumDisplay();
+  }
+
+  // Добавление ячейки (шага) в конкретной строке маршрута
+  function addRouteCell(btn){
+    const row=btn.closest(".route-row");
+    const cnt=row.querySelectorAll(".route-input").length;
+    if(cnt>=maxCells) return;
+
+    const ni=document.createElement("input");
+    ni.type="number"; ni.min="1"; ni.max="10"; ni.required=true;
+    ni.className="form-control route-input me-2";
+    ni.style.width="60px"; ni.style.flex="0 0 auto";
+    ni.name=`route_${[...routesContainer.querySelectorAll('.route-row')].indexOf(row)+1}_${cnt+1}`;
+
+    const arrow=document.createElement("span");
+    arrow.textContent="→"; arrow.className="me-2 flex-shrink-0";
+
+    row.insertBefore(arrow, btn);
+    row.insertBefore(ni, btn);
+
+    updateActionRows();
+  }
+
+  // Делегирование: клики по кнопкам "+" внутри routesContainer
+  routesContainer.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.add-cell');
+    if(btn) addRouteCell(btn);
+  });
+
+  // Делегирование: ввод в route-input
+  routesContainer.addEventListener('input', (e)=>{
+    if(e.target.classList.contains('route-input')){
+      const v=parseInt(e.target.value,10);
+      if(isNaN(v) || v<1) e.target.value="";
+      else if(v>10) e.target.value="10";
+      updateActionRows();
+    }
+  });
+
+  // Делегирование: ввод в вероятностях
+  probContainer.addEventListener('input', (e)=>{
+    if(e.target.classList.contains('route-prob')){
+      let v=parseFloat(e.target.value);
+      if(isNaN(v) || v<0) e.target.value="0";
+      else if(v>1) e.target.value="1";
+      updateProbSumDisplay();
+    }
+  });
+
+  // Первую строку уже делаем отслеживаемой через делегирование, но кнопку "Добавить маршрут" тоже нужна
+  if(addRouteBtn) addRouteBtn.addEventListener("click", addRouteRow);
+
+  // Инициализируем видимость time/error по первым значениям (пусто — всё скрыто)
+  root.querySelectorAll('.time-select').forEach(sel=>{
+    sel.addEventListener('change', ()=>handleTimeDistributionChange(sel));
+    handleTimeDistributionChange(sel);
+  });
+
+  function collect(){
+    const routes=[], rows=root.querySelectorAll('.route-row'), probs=root.querySelectorAll('.route-prob');
+    rows.forEach((row,idx)=>{
+      const path=[];
+      row.querySelectorAll('.route-input').forEach(inp=>{
+        if(inp.value.trim()!=='') path.push(parseInt(inp.value,10));
+      });
+      const prob=parseFloat(probs[idx]?.value ?? '0');
+      if(path.length>0) routes.push({prob, path});
+    });
+
+    const actions=[], used=new Set();
+    rows.forEach(row=>{
+      row.querySelectorAll('.route-input').forEach(inp=>{
+        if(inp.value.trim()!=='') used.add(parseInt(inp.value,10));
+      });
+    });
+
+    used.forEach(id=>{
+      const trow=root.querySelector(`.time-row[data-action="${id}"]`);
+      const erow=root.querySelector(`.error-row[data-action="${id}"]`);
+      if(trow && erow){
+        const tsel=trow.querySelector('.time-select');
+        const ttype= tsel.value==='uniform' ? 'UNIFORM' : 'CONSTANT';
+        let left=null,right=null;
+        if(ttype==='UNIFORM'){
+          left=parseFloat(trow.querySelector(`input[name="time_from_${id}"]`).value);
+          right=parseFloat(trow.querySelector(`input[name="time_to_${id}"]`).value);
+        }else{
+          left=parseFloat(trow.querySelector(`input[name="time_const_${id}"]`).value);
+        }
+        const esel=erow.querySelector('select');
+        let eact='REPEAT';
+        if(esel.value==='to_start') eact='BACK_TO_START';
+        else if(esel.value==='previous') eact='BACK_A_STEP';
+        const eprob=parseFloat(erow.querySelector('input').value);
+        actions.push({id, time:{type:ttype,left,right}, error:{action:eact, prob:eprob}});
+      }
+    });
+
+    return {routes, actions};
+  }
+
+  return {
+    validate: ()=> updateProbSumDisplay() && validateAllUniformTimes(),
+    collect
+  };
+}
+
+/* ===== гистограмма TAB 1 ===== */
+let t1Chart=null, t1LastUsedTimes=null;
+function makeCrisp(canvas, h=400){
+  const dpr=window.devicePixelRatio||1; canvas.style.width='100%'; canvas.style.height=h+'px';
+  const w=Math.max(1,canvas.clientWidth), H=h; canvas.width=Math.round(w*dpr); canvas.height=Math.round(H*dpr);
+}
+function renderHistogram_t1(values,bins){
+  const wrap=document.getElementById('t1-histogramWrap'), info=document.getElementById('t1-histogramInfo');
+  const n=values.length, min=Math.min(...values), max=Math.max(...values), mean=values.reduce((a,b)=>a+b,0)/n;
+  let k=bins ?? (Math.ceil(Math.log2(n))+1); k=Math.max(3,Math.min(50,k));
+  const range=max-min; let edges=[];
+  if(range===0){ const w=Math.max(1e-6,Math.abs(min)*0.01||0.5); edges=[min-w,min,min+w,min+2*w]; k=3; }
+  else { const bw=range/k; for(let i=0;i<=k;i++) edges.push(min+i*bw); }
+  const freq=new Array(k).fill(0);
+  for(const v of values){ if(v===edges[k]){freq[k-1]++;continue;} for(let i=0;i<k;i++){ if(v>=edges[i]&&v<edges[i+1]){freq[i]++;break;} } }
+  const raw=Array.from({length:k},(_,i)=>`[${edges[i].toFixed(2)}; ${edges[i+1].toFixed(2)})`);
+  const step=Math.ceil(k/12); const labels=raw.map((l,i)=>i%step===0?l:'');
+  wrap.classList.remove('d-none');
+  const canvas=document.getElementById('t1-histogramChart'); makeCrisp(canvas,400); const ctx=canvas.getContext('2d');
+  if(t1Chart) t1Chart.destroy();
+  t1Chart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Частота',data:freq}]},options:{
+    responsive:false, maintainAspectRatio:false, devicePixelRatio:1, animation:false,
+    scales:{ y:{beginAtZero:true,title:{display:true,text:'Частота'},ticks:{font:{size:12}},grid:{color:'rgba(0,0,0,0.06)'}},
+             x:{title:{display:true,text:'Интервалы'},ticks:{autoSkip:false,maxRotation:0,minRotation:0,font:{size:12}},grid:{display:false}}},
+    plugins:{legend:{display:true,labels:{font:{size:12}}}, tooltip:{titleFont:{size:12},bodyFont:{size:12},callbacks:{title:(it)=>raw[it[0].dataIndex]||''}}}
+  }});
+  info.classList.remove('d-none');
+  document.getElementById('t1-infoText').innerHTML =
+    `Интервалов: <strong>${k}</strong> · Точек: <strong>${n}</strong> · Мин usedTime: <strong>${min.toFixed(4)}</strong> · Макс usedTime: <strong>${max.toFixed(4)}</strong> · Среднее usedTime: <strong>${mean.toFixed(4)}</strong>`;
+}
+
+/* ===== старт ===== */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const t1 = initRoutesBlock({id:'t1', timeHolder:'#t1-time-holder', errorHolder:'#t1-error-holder'});
+  const b1 = initRoutesBlock({id:'b1', timeHolder:'#b1-time-holder', errorHolder:'#b1-error-holder'});
+  const b2 = initRoutesBlock({id:'b2', timeHolder:'#b2-time-holder', errorHolder:'#b2-error-holder'});
+
+  // TAB 1: расчёт + гистограмма
+  document.getElementById('t1-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    if(!t1.validate()){ alert('Проверьте сумму вероятностей (=1) и интервалы времени (правое > левого).'); return; }
+    const N = parseInt(document.querySelector('#t1-form .sample-size-input').value,10);
+    const data = t1.collect();
+    const payload = { N, routes: data.routes, actions: data.actions };
+
+    try{
+      const resp = await fetch('/api/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const result = await resp.json();
+      const items = Array.isArray(result.result) ? result.result : [];
+      t1LastUsedTimes = items.map(it => typeof it?.usedTime==='number'?it.usedTime:Number(it?.usedTime)).filter(Number.isFinite);
+      if (t1LastUsedTimes.length){
+        document.getElementById('t1-histogramSection').classList.remove('d-none');
+        document.getElementById('t1-hintNoData').classList.add('d-none');
+        document.getElementById('t1-histogramWrap').classList.add('d-none');
+        document.getElementById('t1-histogramInfo').classList.add('d-none');
+      } else {
+        document.getElementById('t1-hintNoData').classList.remove('d-none');
+        alert('Java вернул результат без usedTime.');
+      }
+    } catch(err){
+      console.error(err);
+      alert('Ошибка при обращении к Java: '+err.message);
+    }
+  });
+
+  document.getElementById('t1-buildHistogram').addEventListener('click', ()=>{
+    if(!Array.isArray(t1LastUsedTimes) || !t1LastUsedTimes.length){ alert('Нет данных. Выполните расчёт.'); return; }
+    const c = parseInt(document.getElementById('t1-binsInput').value,10);
+    const bins = Number.isInteger(c) ? Math.max(3,Math.min(50,c)) : null;
+    renderHistogram_t1(t1LastUsedTimes, bins);
+  });
+
+  // TAB 2: SМО
+  const lossValue = document.getElementById('lossValue');
+  const resultCard = document.getElementById('resultCard');
+
+  ['p1','p2','lambda1','lambda2','cyclesN'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.addEventListener('keydown',(e)=>{ if(['-','+','e','E'].includes(e.key)) e.preventDefault(); });
+    el.addEventListener('input', ()=>{ el.value = el.value.replace(/[eE\+\-]/g,''); if (el.value!=='' && Number(el.value)<0) el.value='0'; });
+  });
+  document.getElementById('cyclesN').addEventListener('keydown', (e)=>{ if(e.key==='.'||e.key===',') e.preventDefault(); });
+
+  document.getElementById('smoForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    if(!b1.validate() || !b2.validate()){
+      alert('Проверьте блоки маршрутов: сумма вероятностей (=1) и интервалы времени.');
+      return;
+    }
+    const d1 = b1.collect();
+    const d2 = b2.collect();
+
+    const p1 = parseFloat(document.getElementById('p1').value);
+    const p2 = parseFloat(document.getElementById('p2').value);
+    const lambda1 = parseFloat(document.getElementById('lambda1').value);
+    const lambda2 = parseFloat(document.getElementById('lambda2').value);
+    const N = parseInt(document.getElementById('cyclesN').value,10);
+
+    const allNums=[p1,p2,lambda1,lambda2];
+    if (allNums.some(v=>!Number.isFinite(v) || v<0)){ alert('P1, P2, Lambda1, Lambda2 — неотрицательные числа.'); return; }
+    if (!Number.isInteger(N) || N<2){ alert('Количество циклов должно быть целым числом ≥ 2.'); return; }
+
+    const payload = {
+      N, lambda1, lambda2,
+      routes1: d1.routes, routes2: d2.routes,
+      actions1: d1.actions, actions2: d2.actions,
+      weightWaitTime: p1, weightRepairTime: p2
+    };
+
+    try{
+      const resp = await fetch('/api/smo/calculate', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+      });
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text = await resp.text();
+      let value = NaN;
+      try { value = JSON.parse(text); } catch { value = parseFloat(text); }
+      if (!Number.isFinite(value)){ alert('Ответ Java не число. Тело: '+text.slice(0,200)); return; }
+      lossValue.textContent = Number(value).toFixed(4);
+      resultCard.classList.remove('d-none');
+      resultCard.scrollIntoView({behavior:'smooth', block:'center'});
+    } catch(err){
+      console.error(err);
+      alert('Ошибка при обращении к Java: '+err.message);
+    }
+  });
+});
+</script>
+</body>
+</html>
